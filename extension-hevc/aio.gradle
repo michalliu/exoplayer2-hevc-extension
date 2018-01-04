@@ -51,17 +51,18 @@ android {
         commandLine "rm", "-rf", file("src/main/libs/").absolutePath
     }
 
-    task cleanNativeLib << {
+    task cleanNativeLib  {
         tasks.cleanNativeLib1.execute()
     }
 
-    task distCleanNativeLib << {
+    task distCleanNativeLib  {
         tasks.cleanNativeLib1.execute()
         tasks.cleanNativeLib2.execute()
         tasks.cleanNativeLib3.execute()
     }
 
-    task distClean() << {}
+    task distClean {
+    }
 
     clean.dependsOn cleanNativeLib
     distClean.dependsOn distCleanNativeLib
