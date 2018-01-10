@@ -22,20 +22,13 @@ android {
             println "UseNDK:" + ndkDir
             commandLine "$ndkDir/ndk-build",
                     '-C', file(JNI_FOLDER).absolutePath,
-                    '-j', 1, //Runtime.runtime.availableProcessors(),
+                    '-j', Runtime.runtime.availableProcessors(),
                     'all',
                     'NDK_DEBUG=1'
         } else {
             throw new GradleException("you need configure ndk.dir in local.properties")
         }
     }
-
-    //copying files
-//    task copyNativeLib(type: Exec, description: 'Copy native file') {
-//        commandLine "bash", "-c", "cp src/main/libs/armeabi-v7a/*.so src/main/libs/armeabi-v7a/"
-//    }
-
-//    copyNativeLib.dependsOn buildNativeLib
 
     task cleanNativeLib1(type: Exec, description: 'Clean JNI generated library files') {
         def ndkDir = android.ndkDirectory
@@ -51,25 +44,27 @@ android {
         commandLine "rm", "-rf", file("src/main/libs/").absolutePath
     }
 
-    task cleanNativeLib  {
-        tasks.cleanNativeLib1.execute()
+    task cleanNativeLib(dependsOn: cleanNativeLib1) {
+
     }
 
-    task distCleanNativeLib  {
-        tasks.cleanNativeLib1.execute()
-        tasks.cleanNativeLib2.execute()
-        tasks.cleanNativeLib3.execute()
+    task distCleanNativeLib(dependsOn: [cleanNativeLib1,cleanNativeLib2, cleanNativeLib3])
+
+    task installLibVpx(type: Copy) {
+        from(project(":exoplayer2-extension-vp9").projectDir.absolutePath + "/src/main/libs/armeabi-v7a"){
+            include 'libvpx**.so'
+        }
+        into(project(":demo").projectDir.absolutePath + "/src/main/libs/armeabi-v7a")
     }
 
-    task distClean {
+    task distClean(dependsOn: distCleanNativeLib) {
     }
 
     clean.dependsOn cleanNativeLib
-    distClean.dependsOn distCleanNativeLib
 
-    tasks.withType(JavaCompile) {
-        compileTask -> compileTask.dependsOn buildNativeLib
-    }
+//    tasks.withType(JavaCompile) {
+//        compileTask -> compileTask.dependsOn buildNativeLib
+//    }
 }
 
 hello { task ->
