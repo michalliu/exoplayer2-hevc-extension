@@ -2,69 +2,8 @@ apply plugin: 'com.android.library'
 
 android {
     defaultConfig {
-        minSdkVersion project.ext.minSdkVersion
-        targetSdkVersion project.ext.targetSdkVersion
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
-
-	sourceSets.main {
-        jniLibs.srcDir 'src/main/libs'
-        jni.srcDirs = [] // Disable the automatic ndk-build call by Android Studio.
-    }
-
-    // JNI compile
-    def JNI_FOLDER = 'src/main/jni'
-
-    // call regular ndk-build(.cmd) script from app directory
-    task buildNativeLib(type: Exec, description: 'Compile JNI source via NDK') {
-        def ndkDir = android.ndkDirectory
-        if (ndkDir) {
-            println "UseNDK:" + ndkDir
-            commandLine "$ndkDir/ndk-build",
-                    '-C', file(JNI_FOLDER).absolutePath,
-                    '-j', Runtime.runtime.availableProcessors(),
-                    'all',
-                    'NDK_DEBUG=1'
-        } else {
-            throw new GradleException("you need configure ndk.dir in local.properties")
-        }
-    }
-
-    task cleanNativeLib1(type: Exec, description: 'Clean JNI generated library files') {
-        def ndkDir = android.ndkDirectory
-        commandLine "$ndkDir/ndk-build",
-                '-C', file(JNI_FOLDER).absolutePath,
-                'clean'
-    }
-    task cleanNativeLib2(type: Exec, description: 'Clean JNI object files') {
-        commandLine "rm", "-rf", file("src/main/obj/").absolutePath
-    }
-
-    task cleanNativeLib3(type: Exec, description: 'Clean JNI object files') {
-        commandLine "rm", "-rf", file("src/main/libs/").absolutePath
-    }
-
-    task cleanNativeLib(dependsOn: cleanNativeLib1) {
-
-    }
-
-    task distCleanNativeLib(dependsOn: [cleanNativeLib1,cleanNativeLib2, cleanNativeLib3])
-
-    task installLibVpx(type: Copy) {
-        from(project(":exoplayer2-extension-vp9").projectDir.absolutePath + "/src/main/libs/armeabi-v7a"){
-            include 'libvpx**.so'
-        }
-        into(project(":demo").projectDir.absolutePath + "/src/main/libs/armeabi-v7a")
-    }
-
-    task distClean(dependsOn: distCleanNativeLib) {
-    }
-
-    clean.dependsOn cleanNativeLib
-
-//    tasks.withType(JavaCompile) {
-//        compileTask -> compileTask.dependsOn buildNativeLib
-//    }
 }
 
 hello { task ->
