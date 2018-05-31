@@ -1,27 +1,8 @@
 apply plugin: 'com.android.library'
 
 android {
-    defaultConfig {
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
-    }
-}
-
-hello { task ->
-    println "$task.project.name " +  "-> okay!"
 }
 
 dependencies {
     compile project(':exoplayer2-library-core')
-//    compile project(':exoplayer2-library-dash')
-//    compile project(':exoplayer2-library-hls')
-//    compile project(':exoplayer2-library-smoothstreaming')
-//    compile project(':exoplayer2-library-ui')
-
-    // Testing-only dependencies
-    // Force usage of support annotations in the test app, since it is internally used by the runner module.
-    // copied from https://github.com/googlesamples/android-testing/tree/master/runner/AndroidJunitRunnerSample
-    androidTestCompile 'com.android.support:support-annotations:' + project.ext.supportLibraryVersion;
-    androidTestCompile 'com.android.support.test:runner:' + project.ext.runnerVersion;
-    androidTestCompile 'com.android.support.test:rules:' + project.ext.rulesVersion;
-    androidTestCompile 'com.android.support.test.espresso:espresso-core:' + project.ext.espressoVersion;
 }

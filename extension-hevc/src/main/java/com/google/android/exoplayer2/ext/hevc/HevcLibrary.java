@@ -27,7 +27,7 @@ public final class HevcLibrary {
     ExoPlayerLibraryInfo.registerModule("openHevc");
   }
 
-  private static final LibraryLoader LOADER = new LibraryLoader("LibOpenHevcWrapper");
+  private static final LibraryLoader LOADER = new LibraryLoader("openhevc");
 
   private HevcLibrary() {}
 
