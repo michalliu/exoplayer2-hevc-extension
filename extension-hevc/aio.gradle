@@ -4,5 +4,5 @@ android {
 }
 
 dependencies {
-    compile project(':exoplayer2-library-core')
+    implementation project(':exoplayer2-library-core')
 }
