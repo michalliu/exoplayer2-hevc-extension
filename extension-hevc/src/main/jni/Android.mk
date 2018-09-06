@@ -1,13 +1,9 @@
-LOCAL_PATH := $(call my-dir)
-include $(CLEAR_VARS)
-APP_STL := gnustl_static
-APP_ABI := armeabi
-APP_OPTIM := debug
-LOCAL_ARM_MODE := arm
+TOP_PATH := $(call my-dir)
 
-#LOCAL_CFLAGS    := -I <Your header files goes here>
-LOCAL_CFLAGS    += -g
-LOCAL_CFLAGS    += -ggdb
+# build openhevc static library
+include $(CLEAR_VARS)
+LOCAL_PATH := $(TOP_PATH)/openhevc
+
 LOCAL_CFLAGS    += -O1
 
 openhevc_files := \
@@ -46,7 +42,6 @@ openhevc_files := \
     libavutil/arm/cpu.c \
     libavutil/display.c \
     libavutil/stereo3d.c \
-    gpac/modules/openhevc_dec/openHevcWrapper.c \
     libavcodec/arm/videodsp_init_arm.c \
     libavcodec/ac3tab.c \
     libavcodec/allcodecs.c \
@@ -111,13 +106,11 @@ openhevc_files := \
     libavcodec/arm/simple_idct_armv6.S \
     libavcodec/arm/jrevdct_arm.S \
     libavcodec/arm/int_neon.S \
-    libavcodec/arm/mdct_neon.S \
-    hevc_jni.cc
+    libavcodec/arm/mdct_neon.S
 
 LOCAL_SRC_FILES := $(openhevc_files)
-LOCAL_C_INCLUDES += $(LOCAL_PATH)/platform/arm/ \
-                    $(LOCAL_PATH)/gpac/modules/openhevc_dec/ \
-                    $(LOCAL_PATH)/hevcdec
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/platform/arm/
+LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)
 LOCAL_MODULE := openhevc
 ifeq ($(TARGET_ARCH),arm)
   LOCAL_SDK_VERSION := 9
@@ -125,5 +118,36 @@ endif
 
 LOCAL_LDLIBS := -llog -lz -lm
 LOCAL_LDLIBS += -Wl,--no-warn-shared-textrel
+
+include $(BUILD_STATIC_LIBRARY)
+
+# Build openhevcwrapper
+include $(CLEAR_VARS)
+LOCAL_PATH := $(TOP_PATH)/openhevcwrapper
+
+LOCAL_SRC_FILES := openHevcWrapper.c
+
+LOCAL_C_INCLUDES := $(LOCAL_PATH)
+
+LOCAL_MODULE := openhevcwrapper
+LOCAL_STATIC_LIBRARIES := openhevc
+
+include $(BUILD_STATIC_LIBRARY)
+
+# Build libopenhevc.so
+include $(CLEAR_VARS)
+LOCAL_PATH := $(TOP_PATH)
+
+LOCAL_SRC_FILES := hevcdec_jni.cpp
+
+LOCAL_LDLIBS := -llog
+
+LOCAL_C_INCLUDES := $(LOCAL_PATH)
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include
+
+LOCAL_CPPFLAGS += -frtti -fexceptions -DANDROID -std=c++11
+
+LOCAL_MODULE := hevcdec
+LOCAL_STATIC_LIBRARIES := openhevcwrapper
 
 include $(BUILD_SHARED_LIBRARY)

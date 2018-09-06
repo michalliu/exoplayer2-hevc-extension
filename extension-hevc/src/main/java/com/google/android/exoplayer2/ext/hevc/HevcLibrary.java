@@ -24,10 +24,10 @@ import com.google.android.exoplayer2.util.LibraryLoader;
 public final class HevcLibrary {
 
   static {
-    ExoPlayerLibraryInfo.registerModule("openHevc");
+    ExoPlayerLibraryInfo.registerModule("oskHvc");
   }
 
-  private static final LibraryLoader LOADER = new LibraryLoader("openhevc");
+  private static final LibraryLoader LOADER = new LibraryLoader("hevcdec");
 
   private HevcLibrary() {}
 

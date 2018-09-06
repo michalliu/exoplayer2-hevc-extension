@@ -16,6 +16,7 @@
 package com.google.android.exoplayer2.ext.hevc;
 
 import com.google.android.exoplayer2.C;
+import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.decoder.CryptoInfo;
 import com.google.android.exoplayer2.decoder.SimpleDecoder;
 import com.google.android.exoplayer2.drm.DecryptionException;
@@ -50,11 +51,10 @@ import java.nio.ByteBuffer;
    * @param initialInputBufferSize The initial size of each input buffer.
    * @param exoMediaCrypto The {@link ExoMediaCrypto} object required for decoding encrypted
    *     content. Maybe null and can be ignored if decoder does not handle encrypted content.
-   * @param disableLoopFilter Disable the libvpx in-loop smoothing filter.
    * @throws HevcDecoderException Thrown if an exception occurs when initializing the decoder.
    */
   public HevcDecoder(int numInputBuffers, int numOutputBuffers, int initialInputBufferSize,
-                     ExoMediaCrypto exoMediaCrypto, boolean disableLoopFilter) throws HevcDecoderException {
+                     ExoMediaCrypto exoMediaCrypto, Format format) throws HevcDecoderException {
     super(new HevcInputBuffer[numInputBuffers], new HevcOutputBuffer[numOutputBuffers]);
     if (!HevcLibrary.isAvailable()) {
       throw new HevcDecoderException("Failed to load decoder native libraries.");
@@ -63,7 +63,22 @@ import java.nio.ByteBuffer;
     if (exoMediaCrypto != null && !HevcLibrary.hevcIsSecureDecodeSupported()) {
       throw new HevcDecoderException("Vpx decoder does not support secure decode.");
     }
-    vpxDecContext = hevcInit(disableLoopFilter);
+
+    // copy extradata
+    int l = 0;
+    for (byte[] bb : format.initializationData) {
+      l += bb.length;
+    }
+    byte[] bbs = new byte[l];
+    int i=0;
+    for (byte[] bb : format.initializationData) {
+      System.arraycopy(bb, 0, bbs, i, bb.length);
+    }
+
+    ByteBuffer buffer = ByteBuffer.allocateDirect(bbs.length);
+    buffer.put(bbs);
+    vpxDecContext = hevcInit(buffer, bbs.length);
+
     if (vpxDecContext == 0) {
       throw new HevcDecoderException("Failed to initialize decoder");
     }
@@ -72,7 +87,7 @@ import java.nio.ByteBuffer;
 
   @Override
   public String getName() {
-    return "libvpx" + HevcLibrary.getVersion();
+    return "libopenhevc" + HevcLibrary.getVersion();
   }
 
   /**
@@ -146,9 +161,9 @@ import java.nio.ByteBuffer;
     hevcClose(vpxDecContext);
   }
 
-  private native long hevcInit(boolean disableLoopFilter);
+  private native long hevcInit(ByteBuffer buffer, int length);
   private native long hevcClose(long context);
-  private native long hevcDecode(long context, ByteBuffer encoded, int length);
+  private native int hevcDecode(long context, ByteBuffer encoded, int length);
   private native long hevcSecureDecode(long context, ByteBuffer encoded, int length,
                                        ExoMediaCrypto mediaCrypto, int inputMode, byte[] key, byte[] iv,
                                        int numSubSamples, int[] numBytesOfClearData, int[] numBytesOfEncryptedData);

@@ -110,7 +110,6 @@ public final class LibHevcVideoRenderer extends BaseRenderer {
   private static final int INITIAL_INPUT_BUFFER_SIZE = 768 * 1024; // Value based on cs/SoftVpx.cpp.
 
   private final boolean scaleToFit;
-  private final boolean disableLoopFilter;
   private final long allowedJoiningTimeMs;
   private final int maxDroppedFramesToNotify;
   private final boolean playClearSamplesWithoutKeys;
@@ -175,7 +174,7 @@ public final class LibHevcVideoRenderer extends BaseRenderer {
                               Handler eventHandler, VideoRendererEventListener eventListener,
                               int maxDroppedFramesToNotify) {
     this(scaleToFit, allowedJoiningTimeMs, eventHandler, eventListener, maxDroppedFramesToNotify,
-        null, false, false);
+        null, false);
   }
 
   /**
@@ -194,15 +193,13 @@ public final class LibHevcVideoRenderer extends BaseRenderer {
    *     begin in parallel with key acquisition. This parameter specifies whether the renderer is
    *     permitted to play clear regions of encrypted media files before {@code drmSessionManager}
    *     has obtained the keys necessary to decrypt encrypted regions of the media.
-   * @param disableLoopFilter Disable the libvpx in-loop smoothing filter.
    */
   public LibHevcVideoRenderer(boolean scaleToFit, long allowedJoiningTimeMs,
                               Handler eventHandler, VideoRendererEventListener eventListener,
                               int maxDroppedFramesToNotify, DrmSessionManager<ExoMediaCrypto> drmSessionManager,
-                              boolean playClearSamplesWithoutKeys, boolean disableLoopFilter) {
+                              boolean playClearSamplesWithoutKeys) {
     super(C.TRACK_TYPE_VIDEO);
     this.scaleToFit = scaleToFit;
-    this.disableLoopFilter = disableLoopFilter;
     this.allowedJoiningTimeMs = allowedJoiningTimeMs;
     this.maxDroppedFramesToNotify = maxDroppedFramesToNotify;
     this.drmSessionManager = drmSessionManager;
@@ -702,7 +699,7 @@ public final class LibHevcVideoRenderer extends BaseRenderer {
               NUM_OUTPUT_BUFFERS,
               INITIAL_INPUT_BUFFER_SIZE,
               mediaCrypto,
-              disableLoopFilter);
+              format);
       decoder.setOutputMode(outputMode);
       TraceUtil.endSection();
       long decoderInitializedTimestamp = SystemClock.elapsedRealtime();
