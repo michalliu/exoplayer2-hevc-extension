@@ -60,7 +60,7 @@ OpenHevc_Handle libOpenHevcInit(int nb_pthreads, int thread_type)
         av_init_packet(&openHevcContext->avpkt);
         openHevcContext->codec = avcodec_find_decoder(AV_CODEC_ID_HEVC);
         if (!openHevcContext->codec) {
-            fprintf(stderr, "codec not found\n");
+            ALOGE("%s codec not found\n", __func__);
             return NULL;
         }
 
@@ -100,7 +100,7 @@ int libOpenHevcStartDecoder(OpenHevc_Handle openHevcHandle)
     for(i=0; i < openHevcContexts->nb_decoders; i++) {
         openHevcContext = openHevcContexts->wraper[i];
         if (avcodec_open2(openHevcContext->c, openHevcContext->codec, NULL) < 0) {
-            fprintf(stderr, "could not open codec\n");
+            ALOGE("%s could not open codec\n", __func__);
             return -1;
         }
         if(i+1 < openHevcContexts->nb_decoders)
@@ -133,7 +133,7 @@ int libOpenHevcDecode(OpenHevc_Handle openHevcHandle, const unsigned char *buff,
             openHevcContexts->wraper[i+1]->c->BL_frame = openHevcContexts->wraper[i]->c->BL_frame;
     }
     if (len < 0) {
-        fprintf(stderr, "Error while decoding frame \n");
+        ALOGE("%s Error while decoding frame \n", __func__);
         return -1;
     }
     if(openHevcContexts->set_display)
@@ -240,6 +240,7 @@ void libOpenHevcGetPictureInfo(OpenHevc_Handle openHevcHandle, OpenHevc_FrameInf
     openHevcFrameInfo->display_picture_number  = picture->display_picture_number;
     openHevcFrameInfo->flag                    = (picture->top_field_first << 2) | picture->interlaced_frame; //progressive, interlaced, interlaced bottom field first, interlaced top field first.
     openHevcFrameInfo->nTimeStamp              = picture->pkt_pts;
+    openHevcFrameInfo->colorspace             = picture->colorspace;
 }
 
 void libOpenHevcGetPictureInfoCpy(OpenHevc_Handle openHevcHandle, OpenHevc_FrameInfo *openHevcFrameInfo)
@@ -408,7 +409,7 @@ void libOpenHevcSetActiveDecoders(OpenHevc_Handle openHevcHandle, int val)
     if (val >= 0 && val < openHevcContexts->nb_decoders)
         openHevcContexts->active_layer = val;
     else {
-        fprintf(stderr, "The requested layer %d can not be decoded (it exceeds the number of allocated decoders %d ) \n", val, openHevcContexts->nb_decoders);
+        ALOGE("The requested layer %d can not be decoded (it exceeds the number of allocated decoders %d ) \n", val, openHevcContexts->nb_decoders);
         openHevcContexts->active_layer = openHevcContexts->nb_decoders-1;
     }
 }
@@ -420,7 +421,7 @@ void libOpenHevcSetViewLayers(OpenHevc_Handle openHevcHandle, int val)
     if (val >= 0 && val < openHevcContexts->nb_decoders)
         openHevcContexts->display_layer = val;
     else {
-        fprintf(stderr, "The requested layer %d can not be viewed (it exceeds the number of allocated decoders %d ) \n", val, openHevcContexts->nb_decoders);
+        ALOGE("The requested layer %d can not be viewed (it exceeds the number of allocated decoders %d ) \n", val, openHevcContexts->nb_decoders);
         openHevcContexts->display_layer = openHevcContexts->nb_decoders-1;
     }
 }

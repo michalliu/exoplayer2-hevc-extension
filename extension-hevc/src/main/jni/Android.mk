@@ -1,5 +1,68 @@
 TOP_PATH := $(call my-dir)
 
+# libyuv
+include $(CLEAR_VARS)
+LOCAL_PATH := $(TOP_PATH)/libyuv
+LOCAL_MODULE := libyuv
+LOCAL_C_INCLUDES := $(LOCAL_PATH)
+
+LOCAL_CPP_EXTENSION := .cc
+
+LOCAL_SRC_FILES := \
+    source/compare.cc           \
+    source/compare_common.cc    \
+    source/convert.cc           \
+    source/convert_argb.cc      \
+    source/convert_from.cc      \
+    source/convert_from_argb.cc \
+    source/convert_to_argb.cc   \
+    source/convert_to_i420.cc   \
+    source/cpu_id.cc            \
+    source/planar_functions.cc  \
+    source/rotate.cc            \
+    source/rotate_any.cc        \
+    source/rotate_argb.cc       \
+    source/rotate_common.cc     \
+    source/row_any.cc           \
+    source/row_common.cc        \
+    source/scale.cc             \
+    source/scale_any.cc         \
+    source/scale_argb.cc        \
+    source/scale_common.cc      \
+    source/video_common.cc
+
+ifeq ($(TARGET_ARCH_ABI),armeabi-v7a)
+    LOCAL_CFLAGS += -DLIBYUV_NEON
+    LOCAL_SRC_FILES += \
+        source/compare_neon.cc.neon    \
+        source/rotate_neon.cc.neon     \
+        source/row_neon.cc.neon        \
+        source/scale_neon.cc.neon
+endif
+
+ifeq ($(TARGET_ARCH_ABI),arm64-v8a)
+    LOCAL_CFLAGS += -DLIBYUV_NEON
+    LOCAL_SRC_FILES += \
+        source/compare_neon64.cc    \
+        source/rotate_neon64.cc     \
+        source/row_neon64.cc        \
+        source/scale_neon64.cc
+endif
+
+ifeq ($(TARGET_ARCH_ABI),$(filter $(TARGET_ARCH_ABI), x86 x86_64))
+    LOCAL_SRC_FILES += \
+        source/compare_gcc.cc       \
+        source/rotate_gcc.cc        \
+        source/row_gcc.cc           \
+        source/scale_gcc.cc
+endif
+
+LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/include
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include
+
+LOCAL_MODULE := yuv
+include $(BUILD_STATIC_LIBRARY)
+
 # build openhevc static library
 include $(CLEAR_VARS)
 LOCAL_PATH := $(TOP_PATH)/openhevc
@@ -138,7 +201,7 @@ include $(BUILD_STATIC_LIBRARY)
 include $(CLEAR_VARS)
 LOCAL_PATH := $(TOP_PATH)
 
-LOCAL_SRC_FILES := hevcdec_jni.cpp
+LOCAL_SRC_FILES := hevcdec_jni.cc
 
 LOCAL_LDLIBS := -llog
 
@@ -148,6 +211,8 @@ LOCAL_C_INCLUDES += $(LOCAL_PATH)/include
 LOCAL_CPPFLAGS += -frtti -fexceptions -DANDROID -std=c++11
 
 LOCAL_MODULE := hevcdec
-LOCAL_STATIC_LIBRARIES := openhevcwrapper
+LOCAL_STATIC_LIBRARIES := openhevcwrapper cpufeatures yuv
 
 include $(BUILD_SHARED_LIBRARY)
+
+$(call import-module,android/cpufeatures)
