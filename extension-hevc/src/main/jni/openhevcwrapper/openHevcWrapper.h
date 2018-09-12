@@ -65,9 +65,9 @@ typedef struct OpenHevc_FrameInfo
 
 typedef struct OpenHevc_Frame
 {
-   void**      pvY;
-   void**      pvU;
-   void**      pvV;
+   uint8_t*      pvY;
+   uint8_t*      pvU;
+   uint8_t*      pvV;
    OpenHevc_FrameInfo frameInfo;
 } OpenHevc_Frame;
 

@@ -342,9 +342,9 @@ int libOpenHevcGetOutput(OpenHevc_Handle openHevcHandle, int got_picture, OpenHe
     OpenHevcWrapperContext  *openHevcContext  = openHevcContexts->wraper[openHevcContexts->display_layer];
 
     if (got_picture) {
-        openHevcFrame->pvY       = (void *) openHevcContext->picture->data[0];
-        openHevcFrame->pvU       = (void *) openHevcContext->picture->data[1];
-        openHevcFrame->pvV       = (void *) openHevcContext->picture->data[2];
+        openHevcFrame->pvY       = openHevcContext->picture->data[0];
+        openHevcFrame->pvU       = openHevcContext->picture->data[1];
+        openHevcFrame->pvV       = openHevcContext->picture->data[2];
 
         libOpenHevcGetPictureInfo(openHevcHandle, &openHevcFrame->frameInfo);
     }
