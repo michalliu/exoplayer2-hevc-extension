@@ -149,9 +149,10 @@ import java.util.List;
       }
     }
 
+    String yuvOutPath = HevcLibrary.ensureFilesDir("hevcyuv");
     if (!inputBuffer.isDecodeOnly()) {
       outputBuffer.init(inputBuffer.timeUs, outputMode);
-      int getFrameResult = hevcGetFrame(hvcDecContext, outputBuffer);
+      int getFrameResult = hevcGetFrame(hvcDecContext, outputBuffer, yuvOutPath);
       if (getFrameResult == 1) {
         outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
       } else if (getFrameResult == -1) {
@@ -174,7 +175,7 @@ import java.util.List;
   private native long hevcSecureDecode(long context, ByteBuffer encoded, int length,
                                        ExoMediaCrypto mediaCrypto, int inputMode, byte[] key, byte[] iv,
                                        int numSubSamples, int[] numBytesOfClearData, int[] numBytesOfEncryptedData);
-  private native int hevcGetFrame(long context, HevcOutputBuffer outputBuffer);
+  private native int hevcGetFrame(long context, HevcOutputBuffer outputBuffer, String outPath);
   private native int hevcGetErrorCode(long context);
   private native String hevcGetErrorMessage(long context);
 

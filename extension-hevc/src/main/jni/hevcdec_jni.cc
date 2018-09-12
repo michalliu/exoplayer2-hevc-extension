@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <sys/stat.h>
 
 #include "libyuv.h"
 #include "log.h"
@@ -374,16 +375,32 @@ DECODER_FUNC(jstring, hevcGetErrorMessage, jlong jHandle) {
     return env->NewStringUTF("oops");
 }
 
-DECODER_FUNC(jint, hevcGetFrame, jlong jHandle, jobject jOutputBuffer) {
+DECODER_FUNC(jint, hevcGetFrame, jlong jHandle, jobject jOutputBuffer, jstring jStr) {
     if (got_pic > 0) {
         OpenHevc_Handle ohevc = (OpenHevc_Handle) jHandle;
         OpenHevc_Frame hvcFrame;
+        FILE* outFile = nullptr;
+
         memset(&hvcFrame, 0, sizeof(OpenHevc_Frame_cpy) );
 
         libOpenHevcGetPictureInfo(ohevc, &hvcFrame.frameInfo);
         if ((pic_width != hvcFrame.frameInfo.nWidth) || (pic_height != hvcFrame.frameInfo.nHeight)) {
             pic_width  = hvcFrame.frameInfo.nWidth;
             pic_height = hvcFrame.frameInfo.nHeight;
+        }
+
+        if (jStr != nullptr) {
+            const char* path = env->GetStringUTFChars(jStr, nullptr);
+            struct stat st;
+            int32_t res = stat(path, &st);
+            if (0 == res && (st.st_mode & S_IFDIR)) {
+                char outFilePath[512];
+                sprintf(outFilePath, "%s/%03d_%dx%d.yuv", path, info.NbFrame, pic_width, pic_height);
+                outFile = fopen(outFilePath, "wb");
+                ALOGV("save yuv to %s", outFilePath);
+            } else {
+                ALOGW("WARN: %s is not a valid dir", path);
+            }
         }
 
         int result = libOpenHevcGetOutput(ohevc, 1, &hvcFrame);
@@ -397,6 +414,27 @@ DECODER_FUNC(jint, hevcGetFrame, jlong jHandle, jobject jOutputBuffer) {
         const int kOutputModeYuv = 0;
         const int kOutputModeRgb = 1;
         int outputMode = env->GetIntField(jOutputBuffer, outputModeField);
+
+        if (outFile) {
+            // write Y
+            int format = hvcFrame.frameInfo.chromat_format == YUV420 ? 1 : 0;
+            for (int h = 0; h < hvcFrame.frameInfo.nHeight; h++) {
+                const uint8_t* srcBase1 = hvcFrame.pvY + hvcFrame.frameInfo.nYPitch * h;
+                fwrite(srcBase1, sizeof(uint8_t), hvcFrame.frameInfo.nWidth, outFile);
+            }
+            // write UV
+            int uvLineSize = hvcFrame.frameInfo.nWidth >> format;
+            for (int h = 0; h < hvcFrame.frameInfo.nHeight / 2; h++) {
+                const uint8_t* srcBase2 = hvcFrame.pvU + hvcFrame.frameInfo.nUPitch * h;
+                fwrite(srcBase2, sizeof(uint8_t) , uvLineSize, outFile);
+            }
+            for (int h = 0; h < hvcFrame.frameInfo.nHeight / 2 ; h++) {
+                const uint8_t* srcBase3 = hvcFrame.pvV + hvcFrame.frameInfo.nVPitch * h;
+                fwrite(srcBase3, sizeof(uint8_t) , uvLineSize, outFile);
+            }
+            fflush(outFile);
+            fclose(outFile);
+        }
 
         if (outputMode == kOutputModeRgb) {
             // resize buffer if required.

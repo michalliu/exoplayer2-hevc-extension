@@ -220,8 +220,7 @@ public final class LibHevcVideoRenderer extends BaseRenderer {
         } else {
           if (vpxDecoderInfo == null) {
               vpxDecoderInfo = "HevcLibrary Version:" + HevcLibrary.getVersion()
-                              + ", build params:" + HevcLibrary.getBuildConfig()
-                              + ", HighBitDepthSupported:" + HevcLibrary.isHighBitDepthSupported();
+                              + ", build params:" + HevcLibrary.getBuildConfig();
               Log.i(TAG, vpxDecoderInfo);
             }
        }
