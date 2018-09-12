@@ -179,6 +179,10 @@ ifeq ($(TARGET_ARCH),arm)
   LOCAL_SDK_VERSION := 9
 endif
 
+ifeq ($(TARGET_ARCH_ABI),armeabi-v7a)
+LOCAL_ARM_NEON := true
+endif
+
 LOCAL_LDLIBS := -llog -lz -lm
 LOCAL_LDLIBS += -Wl,--no-warn-shared-textrel
 
@@ -212,6 +216,11 @@ LOCAL_CPPFLAGS += -frtti -fexceptions -DANDROID -std=c++11
 
 LOCAL_MODULE := hevcdec
 LOCAL_STATIC_LIBRARIES := openhevcwrapper cpufeatures yuv
+
+
+ifeq ($(TARGET_ARCH_ABI),armeabi-v7a)
+LOCAL_ARM_NEON := true
+endif
 
 include $(BUILD_SHARED_LIBRARY)
 

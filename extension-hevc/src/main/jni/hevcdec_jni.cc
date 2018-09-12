@@ -306,7 +306,11 @@ DECODER_FUNC(jlong, hevcInit, jobject extraData, jint len) {
 
     memset(&info, 0, sizeof(Info) );
 
-    ALOGI("[%s] libOpenHevcInit thread_count=%d", __func__, __LINE__);
+    uint8_t arm_neon = 0;
+#ifdef __ARM_NEON__
+    arm_neon = 1;
+#endif
+    ALOGI("[%s] libOpenHevcInit thd=%d neon=%d", __func__, nb_pthreads, arm_neon);
 
     if (NULL == ohevc) {
         ALOGE("[%s] libOpenHevcInit err", __func__);
@@ -466,7 +470,7 @@ DECODER_FUNC(jint, hevcGetFrame, jlong jHandle, jobject jOutputBuffer) {
                 // it's not important to optimize the stride at this time.
                 int converted = 0;
 #ifdef __ARM_NEON__
-                converted = convert_16_to_8_neon(img, data, uvHeight, yLength, uvLength);
+                converted = convert_16_to_8_neon(&hvcFrame, data, uvHeight, yLength, uvLength);
 #endif  // __ARM_NEON__
                 if (!converted) {
                     convert_16_to_8_standard(&hvcFrame, data, uvHeight, yLength, uvLength);
