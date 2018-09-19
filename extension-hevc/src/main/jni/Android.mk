@@ -3,7 +3,6 @@ TOP_PATH := $(call my-dir)
 # libyuv
 include $(CLEAR_VARS)
 LOCAL_PATH := $(TOP_PATH)/libyuv
-LOCAL_MODULE := libyuv
 LOCAL_C_INCLUDES := $(LOCAL_PATH)
 
 LOCAL_CPP_EXTENSION := .cc
