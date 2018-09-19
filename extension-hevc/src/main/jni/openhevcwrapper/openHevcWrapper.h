@@ -29,6 +29,8 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <libavutil/pixfmt.h>
+#include "../include/log.h"
 
 typedef void* OpenHevc_Handle;
 
@@ -58,13 +60,14 @@ typedef struct OpenHevc_FrameInfo
    int         display_picture_number;
    int         flag; //progressive, interlaced, interlaced top field first, interlaced bottom field first.
    int64_t     nTimeStamp;
+   enum AVColorSpace colorspace;
 } OpenHevc_FrameInfo;
 
 typedef struct OpenHevc_Frame
 {
-   void**      pvY;
-   void**      pvU;
-   void**      pvV;
+   uint8_t*      pvY;
+   uint8_t*      pvU;
+   uint8_t*      pvV;
    OpenHevc_FrameInfo frameInfo;
 } OpenHevc_Frame;
 

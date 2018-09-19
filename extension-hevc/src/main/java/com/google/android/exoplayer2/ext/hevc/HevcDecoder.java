@@ -16,12 +16,14 @@
 package com.google.android.exoplayer2.ext.hevc;
 
 import com.google.android.exoplayer2.C;
+import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.decoder.CryptoInfo;
 import com.google.android.exoplayer2.decoder.SimpleDecoder;
 import com.google.android.exoplayer2.drm.DecryptionException;
 import com.google.android.exoplayer2.drm.ExoMediaCrypto;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 
 /**
  * Vpx decoder.
@@ -33,28 +35,28 @@ import java.nio.ByteBuffer;
   public static final int OUTPUT_MODE_YUV = 0;
   public static final int OUTPUT_MODE_RGB = 1;
 
+  // DO NOT CHANGE THESE CONSTANTS WITHOUT CHANGE ITS NATIVE COUNTERPART
   private static final int NO_ERROR = 0;
-  private static final int DECODE_ERROR = 1;
-  private static final int DRM_ERROR = 2;
+  private static final int DECODE_ERROR = -1;
+  private static final int DRM_ERROR = -2;
 
   private final ExoMediaCrypto exoMediaCrypto;
-  private final long vpxDecContext;
+  private final long hvcDecContext;
 
   private volatile int outputMode;
 
   /**
-   * Creates a HEVC9 decoder.
+   * Creates a HEVC decoder.
    *
    * @param numInputBuffers The number of input buffers.
    * @param numOutputBuffers The number of output buffers.
    * @param initialInputBufferSize The initial size of each input buffer.
    * @param exoMediaCrypto The {@link ExoMediaCrypto} object required for decoding encrypted
    *     content. Maybe null and can be ignored if decoder does not handle encrypted content.
-   * @param disableLoopFilter Disable the libvpx in-loop smoothing filter.
    * @throws HevcDecoderException Thrown if an exception occurs when initializing the decoder.
    */
   public HevcDecoder(int numInputBuffers, int numOutputBuffers, int initialInputBufferSize,
-                     ExoMediaCrypto exoMediaCrypto, boolean disableLoopFilter) throws HevcDecoderException {
+                     ExoMediaCrypto exoMediaCrypto, Format format) throws HevcDecoderException {
     super(new HevcInputBuffer[numInputBuffers], new HevcOutputBuffer[numOutputBuffers]);
     if (!HevcLibrary.isAvailable()) {
       throw new HevcDecoderException("Failed to load decoder native libraries.");
@@ -63,16 +65,36 @@ import java.nio.ByteBuffer;
     if (exoMediaCrypto != null && !HevcLibrary.hevcIsSecureDecodeSupported()) {
       throw new HevcDecoderException("Vpx decoder does not support secure decode.");
     }
-    vpxDecContext = hevcInit(disableLoopFilter);
-    if (vpxDecContext == 0) {
+
+    ByteBuffer buffer = wrapBytes(format.initializationData);
+    hvcDecContext = hevcInit(buffer, buffer.capacity());
+
+    if (hvcDecContext == 0) {
       throw new HevcDecoderException("Failed to initialize decoder");
     }
     setInitialInputBufferSize(initialInputBufferSize);
   }
 
+  private ByteBuffer wrapBytes(List<byte[]> bytesList) {
+    int size = 0;
+    for (byte[] it : bytesList) {
+      size += it.length;
+    }
+    ByteBuffer buffer = ByteBuffer.allocateDirect(size);
+    byte[] data = new byte[size];
+
+    int i = 0;
+    for (byte[] it : bytesList) {
+      System.arraycopy(it, 0, data, i, it.length);
+      i += it.length;
+    }
+    buffer.put(data);
+    return buffer;
+  }
+
   @Override
   public String getName() {
-    return "libvpx" + HevcLibrary.getVersion();
+    return "libopenhevc" + HevcLibrary.getVersion();
   }
 
   /**
@@ -112,28 +134,29 @@ import java.nio.ByteBuffer;
     int inputSize = inputData.limit();
     CryptoInfo cryptoInfo = inputBuffer.cryptoInfo;
     final long result = inputBuffer.isEncrypted()
-        ? hevcSecureDecode(vpxDecContext, inputData, inputSize, exoMediaCrypto,
+        ? hevcSecureDecode(hvcDecContext, inputData, inputSize, exoMediaCrypto,
         cryptoInfo.mode, cryptoInfo.key, cryptoInfo.iv, cryptoInfo.numSubSamples,
         cryptoInfo.numBytesOfClearData, cryptoInfo.numBytesOfEncryptedData)
-        : hevcDecode(vpxDecContext, inputData, inputSize);
+        : hevcDecode(hvcDecContext, inputData, inputSize);
     if (result != NO_ERROR) {
       if (result == DRM_ERROR) {
-        String message = "Drm error: " + hevcGetErrorMessage(vpxDecContext);
+        String message = "Drm error: " + hevcGetErrorMessage(hvcDecContext);
         DecryptionException cause = new DecryptionException(
-            hevcGetErrorCode(vpxDecContext), message);
+            hevcGetErrorCode(hvcDecContext), message);
         return new HevcDecoderException(message, cause);
       } else {
-        return new HevcDecoderException("Decode error: " + hevcGetErrorMessage(vpxDecContext));
+        return new HevcDecoderException("Decode error: " + hevcGetErrorMessage(hvcDecContext));
       }
     }
 
+    String yuvOutPath = HevcLibrary.ensureFilesDir("hevcyuv");
     if (!inputBuffer.isDecodeOnly()) {
       outputBuffer.init(inputBuffer.timeUs, outputMode);
-      int getFrameResult = hevcGetFrame(vpxDecContext, outputBuffer);
+      int getFrameResult = hevcGetFrame(hvcDecContext, outputBuffer, yuvOutPath);
       if (getFrameResult == 1) {
         outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
       } else if (getFrameResult == -1) {
-        return new HevcDecoderException("Buffer initialization failed.");
+        return new HevcDecoderException("hevcGetFrame failed.");
       }
       outputBuffer.colorInfo = inputBuffer.colorInfo;
     }
@@ -143,16 +166,16 @@ import java.nio.ByteBuffer;
   @Override
   public void release() {
     super.release();
-    hevcClose(vpxDecContext);
+    hevcClose(hvcDecContext);
   }
 
-  private native long hevcInit(boolean disableLoopFilter);
+  private native long hevcInit(ByteBuffer buffer, int length);
   private native long hevcClose(long context);
-  private native long hevcDecode(long context, ByteBuffer encoded, int length);
+  private native int hevcDecode(long context, ByteBuffer encoded, int length);
   private native long hevcSecureDecode(long context, ByteBuffer encoded, int length,
                                        ExoMediaCrypto mediaCrypto, int inputMode, byte[] key, byte[] iv,
                                        int numSubSamples, int[] numBytesOfClearData, int[] numBytesOfEncryptedData);
-  private native int hevcGetFrame(long context, HevcOutputBuffer outputBuffer);
+  private native int hevcGetFrame(long context, HevcOutputBuffer outputBuffer, String outPath);
   private native int hevcGetErrorCode(long context);
   private native String hevcGetErrorMessage(long context);
 

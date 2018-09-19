@@ -15,8 +15,14 @@
  */
 package com.google.android.exoplayer2.ext.hevc;
 
+import android.os.Environment;
+import android.text.TextUtils;
+import android.util.Log;
+
 import com.google.android.exoplayer2.ExoPlayerLibraryInfo;
 import com.google.android.exoplayer2.util.LibraryLoader;
+
+import java.io.File;
 
 /**
  * Configures and queries the underlying native library.
@@ -24,10 +30,10 @@ import com.google.android.exoplayer2.util.LibraryLoader;
 public final class HevcLibrary {
 
   static {
-    ExoPlayerLibraryInfo.registerModule("openHevc");
+    ExoPlayerLibraryInfo.registerModule("oskHvc");
   }
 
-  private static final LibraryLoader LOADER = new LibraryLoader("openhevc");
+  private static final LibraryLoader LOADER = new LibraryLoader("hevcdec");
 
   private HevcLibrary() {}
 
@@ -64,14 +70,53 @@ public final class HevcLibrary {
     return isAvailable() ? hevcGetBuildConfig() : null;
   }
 
-  /**
-   * Returns true if the underlying libvpx library supports high bit depth.
-   */
-  public static boolean isHighBitDepthSupported() {
-    String config = getBuildConfig();
-    int indexHbd = config != null
-        ? config.indexOf("--enable-vp9-highbitdepth") : -1;
-    return indexHbd >= 0;
+  private static String ensureDir(File dir) {
+    boolean result = false;
+    if (dir.exists() && dir.isFile()) {
+      result = dir.delete();
+    }
+    if(!dir.exists()) {
+      result = dir.mkdirs();
+    }
+    if (dir.isDirectory() && dir.exists()) {
+      result = true;
+    }
+    if (result) {
+      return dir.getAbsolutePath();
+    }
+    return null;
+  }
+
+  public static String ensureFilesDir(String requestDir) {
+    String resultPath = "";
+    if (!TextUtils.isEmpty(requestDir)) {
+      File filesRootDir = null;
+      try {
+        filesRootDir = Environment.getExternalStorageDirectory();
+      } catch (Exception ex) {
+        ex.printStackTrace();
+      }
+      if (filesRootDir != null) {
+        String fileDir = filesRootDir + File.separator + requestDir;
+        File dstDir = new File(fileDir);
+        resultPath = ensureDir(dstDir);
+      }
+
+      if (TextUtils.isEmpty(resultPath)) {
+        filesRootDir = null;
+        try {
+          filesRootDir = Environment.getDataDirectory();
+        } catch (Exception ex) {
+          ex.printStackTrace();
+        }
+        if (filesRootDir != null) {
+          String fileDir = filesRootDir + File.separator + requestDir;
+          File dstDir = new File(fileDir);
+          resultPath = ensureDir(dstDir);
+        }
+      }
+    }
+    return resultPath;
   }
 
   private static native String hevcGetVersion();
