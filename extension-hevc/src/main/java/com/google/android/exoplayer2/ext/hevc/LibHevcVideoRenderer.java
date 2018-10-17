@@ -149,7 +149,7 @@ public final class LibHevcVideoRenderer extends BaseRenderer {
 
   protected DecoderCounters decoderCounters;
 
-  private String vpxDecoderInfo;
+  private String decoderInfo;
 
   /**
    * @param scaleToFit Whether video frames should be scaled to fit when rendering.
@@ -218,10 +218,10 @@ public final class LibHevcVideoRenderer extends BaseRenderer {
       if (!HevcLibrary.isAvailable()) {
           Log.w(TAG, "HevcLibrary not available");
         } else {
-          if (vpxDecoderInfo == null) {
-              vpxDecoderInfo = "HevcLibrary Version:" + HevcLibrary.getVersion()
+          if (decoderInfo == null) {
+            decoderInfo = "HevcLibrary Version:" + HevcLibrary.getVersion()
                               + ", build params:" + HevcLibrary.getBuildConfig();
-              Log.i(TAG, vpxDecoderInfo);
+              Log.i(TAG, decoderInfo);
             }
        }
   }
