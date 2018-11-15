@@ -292,6 +292,7 @@ static const int DECODE_DRM_ERROR = -2;
 static jmethodID initForRgbFrame;
 static jmethodID initForYuvFrame;
 static jfieldID dataField;
+static jfieldID timeUsField;
 static jfieldID outputModeField;
 
 DECODER_FUNC(jlong, hevcInit, jobject extraData, jint len) {
@@ -341,6 +342,7 @@ DECODER_FUNC(jlong, hevcInit, jobject extraData, jint len) {
                                            "(II)Z");
         dataField = env->GetFieldID(outputBufferClass, "data",
                                     "Ljava/nio/ByteBuffer;");
+        timeUsField = env->GetFieldID(outputBufferClass, "timeUs", "J");
         outputModeField = env->GetFieldID(outputBufferClass, "mode", "I");
     }
 
@@ -355,13 +357,13 @@ DECODER_FUNC(jlong, hevcClose, jlong jHandle) {
     return 0;
 }
 
-DECODER_FUNC(jint, hevcDecode, jlong jHandle, jobject encoded, jint len) {
+DECODER_FUNC(jint, hevcDecode, jlong jHandle, jobject encoded, jint len, int64_t pts) {
     OpenHevc_Handle ohevc = (OpenHevc_Handle) jHandle;
     const uint8_t *const buffer =
             reinterpret_cast<const uint8_t *>(env->GetDirectBufferAddress(encoded));
     //Zero if no frame could be decompressed, otherwise, it is nonzero.
     //-1 indicates error occurred
-    got_pic = libOpenHevcDecode(ohevc, buffer, len, 0);
+    got_pic = libOpenHevcDecode(ohevc, buffer, len, pts);
     ALOGD("DEBUG: %d frame decoded got_pic %d ", info.NbFrame, got_pic);
     info.NbFrame++;
     if (got_pic < 0) {
@@ -395,8 +397,10 @@ DECODER_FUNC(jint, hevcGetFrame, jlong jHandle, jobject jOutputBuffer, jstring j
             int32_t res = stat(path, &st);
             if (0 == res && (st.st_mode & S_IFDIR)) {
                 char outFilePath[512];
-                sprintf(outFilePath, "%s/%03d_%dx%d.yuv", path, info.NbFrame, pic_width, pic_height);
-                outFile = fopen(outFilePath, "wb");
+//                sprintf(outFilePath, "%s/%03d_%dx%d.yuv", path, info.NbFrame, pic_width, pic_height);
+//                outFile = fopen(outFilePath, "wb");
+                sprintf(outFilePath, "%s/video_%dx%d.yuv", path, pic_width, pic_height);
+                outFile = fopen(outFilePath, "ab+");
                 ALOGV("save yuv to %s", outFilePath);
             } else {
                 ALOGW("WARN: %s is not a valid dir", path);
@@ -449,7 +453,7 @@ DECODER_FUNC(jint, hevcGetFrame, jlong jHandle, jobject jOutputBuffer, jstring j
             const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
             uint8_t* const dst =
                     reinterpret_cast<uint8_t*>(env->GetDirectBufferAddress(dataObject));
-
+            env->SetLongField(jOutputBuffer,timeUsField,hvcFrame.frameInfo.pts);
             if (hvcFrame.frameInfo.chromat_format == YUV420) {
                 libyuv::I420ToRGB565((uint8*)hvcFrame.pvY, hvcFrame.frameInfo.nYPitch,
                                      (uint8*)hvcFrame.pvU, hvcFrame.frameInfo.nUPitch,

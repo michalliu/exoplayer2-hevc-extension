@@ -61,6 +61,7 @@ typedef struct OpenHevc_FrameInfo
    int         flag; //progressive, interlaced, interlaced top field first, interlaced bottom field first.
    int64_t     nTimeStamp;
    enum AVColorSpace colorspace;
+   int64_t     pts;
 } OpenHevc_FrameInfo;
 
 typedef struct OpenHevc_Frame

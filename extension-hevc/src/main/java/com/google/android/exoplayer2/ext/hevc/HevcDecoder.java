@@ -137,7 +137,7 @@ import java.util.List;
         ? hevcSecureDecode(hvcDecContext, inputData, inputSize, exoMediaCrypto,
         cryptoInfo.mode, cryptoInfo.key, cryptoInfo.iv, cryptoInfo.numSubSamples,
         cryptoInfo.numBytesOfClearData, cryptoInfo.numBytesOfEncryptedData)
-        : hevcDecode(hvcDecContext, inputData, inputSize);
+        : hevcDecode(hvcDecContext, inputData, inputSize, inputBuffer.timeUs);
     if (result != NO_ERROR) {
       if (result == DRM_ERROR) {
         String message = "Drm error: " + hevcGetErrorMessage(hvcDecContext);
@@ -151,7 +151,7 @@ import java.util.List;
 
     String yuvOutPath = HevcLibrary.ensureFilesDir("hevcyuv");
     if (!inputBuffer.isDecodeOnly()) {
-      outputBuffer.init(inputBuffer.timeUs, outputMode);
+      outputBuffer.init(0/*filled by decoder*/, outputMode);
       int getFrameResult = hevcGetFrame(hvcDecContext, outputBuffer, yuvOutPath);
       if (getFrameResult == 1) {
         outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
@@ -171,7 +171,7 @@ import java.util.List;
 
   private native long hevcInit(ByteBuffer buffer, int length);
   private native long hevcClose(long context);
-  private native int hevcDecode(long context, ByteBuffer encoded, int length);
+  private native int hevcDecode(long context, ByteBuffer encoded, int length, long pts);
   private native long hevcSecureDecode(long context, ByteBuffer encoded, int length,
                                        ExoMediaCrypto mediaCrypto, int inputMode, byte[] key, byte[] iv,
                                        int numSubSamples, int[] numBytesOfClearData, int[] numBytesOfEncryptedData);
