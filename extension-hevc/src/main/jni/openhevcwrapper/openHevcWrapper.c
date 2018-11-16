@@ -241,7 +241,7 @@ void libOpenHevcGetPictureInfo(OpenHevc_Handle openHevcHandle, OpenHevc_FrameInf
     openHevcFrameInfo->flag                    = (picture->top_field_first << 2) | picture->interlaced_frame; //progressive, interlaced, interlaced bottom field first, interlaced top field first.
     openHevcFrameInfo->nTimeStamp              = picture->pkt_pts;
     openHevcFrameInfo->colorspace             = picture->colorspace;
-    openHevcFrameInfo->pts                     = picture->pkt_pts;
+    openHevcFrameInfo->pts                     = av_frame_get_best_effort_timestamp(picture);
 }
 
 void libOpenHevcGetPictureInfoCpy(OpenHevc_Handle openHevcHandle, OpenHevc_FrameInfo *openHevcFrameInfo)
