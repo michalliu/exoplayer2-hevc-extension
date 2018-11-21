@@ -137,7 +137,7 @@ import java.util.List;
         ? hevcSecureDecode(hvcDecContext, inputData, inputSize, exoMediaCrypto,
         cryptoInfo.mode, cryptoInfo.key, cryptoInfo.iv, cryptoInfo.numSubSamples,
         cryptoInfo.numBytesOfClearData, cryptoInfo.numBytesOfEncryptedData)
-        : hevcDecode(hvcDecContext, inputData, inputSize, inputBuffer.timeUs);
+        : hevcDecode(hvcDecContext, inputData, inputSize, inputBuffer.timeUs, reset);
     if (result != NO_ERROR) {
       if (result == DRM_ERROR) {
         String message = "Drm error: " + hevcGetErrorMessage(hvcDecContext);
@@ -171,7 +171,7 @@ import java.util.List;
 
   private native long hevcInit(ByteBuffer buffer, int length);
   private native long hevcClose(long context);
-  private native int hevcDecode(long context, ByteBuffer encoded, int length, long pts);
+  private native int hevcDecode(long context, ByteBuffer encoded, int length, long pts, boolean flush);
   private native long hevcSecureDecode(long context, ByteBuffer encoded, int length,
                                        ExoMediaCrypto mediaCrypto, int inputMode, byte[] key, byte[] iv,
                                        int numSubSamples, int[] numBytesOfClearData, int[] numBytesOfEncryptedData);

@@ -357,13 +357,13 @@ DECODER_FUNC(jlong, hevcClose, jlong jHandle) {
     return 0;
 }
 
-DECODER_FUNC(jint, hevcDecode, jlong jHandle, jobject encoded, jint len, int64_t pts) {
+DECODER_FUNC(jint, hevcDecode, jlong jHandle, jobject encoded, jint len, int64_t pts, jint flush) {
     OpenHevc_Handle ohevc = (OpenHevc_Handle) jHandle;
     const uint8_t *const buffer =
             reinterpret_cast<const uint8_t *>(env->GetDirectBufferAddress(encoded));
     //Zero if no frame could be decompressed, otherwise, it is nonzero.
     //-1 indicates error occurred
-    got_pic = libOpenHevcDecode(ohevc, buffer, len, pts);
+    got_pic = libOpenHevcDecode(ohevc, buffer, len, pts, flush);
     ALOGD("DEBUG: %d frame decoded got_pic %d ", info.NbFrame, got_pic);
     info.NbFrame++;
     if (got_pic < 0) {

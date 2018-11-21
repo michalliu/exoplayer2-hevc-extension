@@ -109,7 +109,7 @@ int libOpenHevcStartDecoder(OpenHevc_Handle openHevcHandle)
     return 1;
 }
 
-int libOpenHevcDecode(OpenHevc_Handle openHevcHandle, const unsigned char *buff, int au_len, int64_t pts)
+int libOpenHevcDecode(OpenHevc_Handle openHevcHandle, const unsigned char *buff, int au_len, int64_t pts, int flush)
 {
     int got_picture[MAX_DECODERS], len=0, i, max_layer;
     OpenHevcWrapperContexts *openHevcContexts = (OpenHevcWrapperContexts *) openHevcHandle;
@@ -127,6 +127,9 @@ int libOpenHevcDecode(OpenHevc_Handle openHevcHandle, const unsigned char *buff,
             openHevcContext->avpkt.data = NULL;
         }
         openHevcContext->avpkt.pts  = pts;
+        if(flush) {
+            avcodec_flush_buffers(openHevcContext->c);
+        }
         len                         = avcodec_decode_video2( openHevcContext->c, openHevcContext->picture,
                                                              &got_picture[i], &openHevcContext->avpkt);
         if(i+1 < openHevcContexts->nb_decoders)
