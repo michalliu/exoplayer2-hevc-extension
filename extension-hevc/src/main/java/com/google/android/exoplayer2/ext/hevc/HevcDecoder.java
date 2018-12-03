@@ -15,9 +15,12 @@
  */
 package com.google.android.exoplayer2.ext.hevc;
 
+import android.util.Log;
+
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.decoder.CryptoInfo;
+import com.google.android.exoplayer2.decoder.OutputBuffer;
 import com.google.android.exoplayer2.decoder.SimpleDecoder;
 import com.google.android.exoplayer2.drm.DecryptionException;
 import com.google.android.exoplayer2.drm.ExoMediaCrypto;
@@ -63,7 +66,7 @@ import java.util.List;
     }
     this.exoMediaCrypto = exoMediaCrypto;
     if (exoMediaCrypto != null && !HevcLibrary.hevcIsSecureDecodeSupported()) {
-      throw new HevcDecoderException("Vpx decoder does not support secure decode.");
+      throw new HevcDecoderException("Hevc decoder does not support secure decode.");
     }
 
     ByteBuffer buffer = wrapBytes(format.initializationData);
@@ -130,37 +133,60 @@ import java.util.List;
   @Override
   protected HevcDecoderException decode(HevcInputBuffer inputBuffer, HevcOutputBuffer outputBuffer,
                                         boolean reset) {
-    ByteBuffer inputData = inputBuffer.data;
-    int inputSize = inputData.limit();
-    CryptoInfo cryptoInfo = inputBuffer.cryptoInfo;
-    final long result = inputBuffer.isEncrypted()
-        ? hevcSecureDecode(hvcDecContext, inputData, inputSize, exoMediaCrypto,
-        cryptoInfo.mode, cryptoInfo.key, cryptoInfo.iv, cryptoInfo.numSubSamples,
-        cryptoInfo.numBytesOfClearData, cryptoInfo.numBytesOfEncryptedData)
-        : hevcDecode(hvcDecContext, inputData, inputSize, inputBuffer.timeUs, reset);
-    if (result != NO_ERROR) {
-      if (result == DRM_ERROR) {
-        String message = "Drm error: " + hevcGetErrorMessage(hvcDecContext);
-        DecryptionException cause = new DecryptionException(
-            hevcGetErrorCode(hvcDecContext), message);
-        return new HevcDecoderException(message, cause);
-      } else {
-        return new HevcDecoderException("Decode error: " + hevcGetErrorMessage(hvcDecContext));
-      }
+    if(inputBuffer.isEncrypted()) {
+      return new HevcDecoderException("Hevc decoder does not support secure decode.\n");
     }
 
-    String yuvOutPath = HevcLibrary.ensureFilesDir("hevcyuv");
-    if (!inputBuffer.isDecodeOnly()) {
-      outputBuffer.init(0/*filled by decoder*/, outputMode);
-      int getFrameResult = hevcGetFrame(hvcDecContext, outputBuffer, yuvOutPath);
-      if (getFrameResult == 1) {
-        outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
-      } else if (getFrameResult == -1) {
-        return new HevcDecoderException("hevcGetFrame failed.");
-      }
-      outputBuffer.colorInfo = inputBuffer.colorInfo;
+    String outpath = null;//HevcLibrary.ensureFilesDir("hevcyuv");
+    ByteBuffer inputData = inputBuffer.data;
+    int inputSize = inputData.limit();
+
+    //这里没有直接传InputBuffer，是想尽量减少jni的调用，以减少耗时
+    //native层会设置OutputBuffer的data和pts
+    final long result = hevcDecode(hvcDecContext, inputData, inputSize, inputBuffer.timeUs,
+            outputBuffer, outputMode, reset, outpath/* for debug */);
+
+    if(result == 1) {//这里不放在native层做，只是想减少一次jni的调用
+      outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
+    } else if(result != NO_ERROR) {
+      return new HevcDecoderException("Decode error: " + result);
     }
+
+    outputBuffer.colorInfo = inputBuffer.colorInfo;
+    outputBuffer.mode = outputMode;
     return null;
+
+//    ByteBuffer inputData = inputBuffer.data;
+//    int inputSize = inputData.limit();
+//    CryptoInfo cryptoInfo = inputBuffer.cryptoInfo;
+//    final long result = inputBuffer.isEncrypted()
+//        ? hevcSecureDecode(hvcDecContext, inputData, inputSize, exoMediaCrypto,
+//        cryptoInfo.mode, cryptoInfo.key, cryptoInfo.iv, cryptoInfo.numSubSamples,
+//        cryptoInfo.numBytesOfClearData, cryptoInfo.numBytesOfEncryptedData)
+//        : hevcDecode(hvcDecContext, inputData, inputSize, inputBuffer.timeUs, reset);
+//    if (result != NO_ERROR) {
+//      if (result == DRM_ERROR) {
+//        String message = "Drm error: " + hevcGetErrorMessage(hvcDecContext);
+//        DecryptionException cause = new DecryptionException(
+//            hevcGetErrorCode(hvcDecContext), message);
+//        return new HevcDecoderException(message, cause);
+//      } else {
+//        return new HevcDecoderException("Decode error: " + hevcGetErrorMessage(hvcDecContext));
+//      }
+//    }
+//
+//    String yuvOutPath = HevcLibrary.ensureFilesDir("hevcyuv");
+//    if (!inputBuffer.isDecodeOnly()) {
+//      outputBuffer.init(0/*filled by decoder*/, outputMode);
+//      int getFrameResult = hevcGetFrame(hvcDecContext, outputBuffer, yuvOutPath);
+//      if (getFrameResult == 1) {
+//        outputBuffer.addFlag(C.BUFFER_FLAG_DECODE_ONLY);
+//      } else if (getFrameResult == -1) {
+//        return new HevcDecoderException("hevcGetFrame failed.");
+//      }
+//      outputBuffer.colorInfo = inputBuffer.colorInfo;
+//    }
+//    return null;
   }
 
   @Override
@@ -171,10 +197,16 @@ import java.util.List;
 
   private native long hevcInit(ByteBuffer buffer, int length);
   private native long hevcClose(long context);
-  private native int hevcDecode(long context, ByteBuffer encoded, int length, long pts, boolean flush);
+
+  //@FastNative
+  private native int hevcDecode(long context, ByteBuffer encoded, int length, long pts,
+                                OutputBuffer ouputBuffer, int outputMode, boolean flush, String outpath);
+
+  // todo
   private native long hevcSecureDecode(long context, ByteBuffer encoded, int length,
                                        ExoMediaCrypto mediaCrypto, int inputMode, byte[] key, byte[] iv,
                                        int numSubSamples, int[] numBytesOfClearData, int[] numBytesOfEncryptedData);
+
   private native int hevcGetFrame(long context, HevcOutputBuffer outputBuffer, String outPath);
   private native int hevcGetErrorCode(long context);
   private native String hevcGetErrorMessage(long context);

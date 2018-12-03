@@ -115,10 +115,9 @@ int libOpenHevcDecode(OpenHevc_Handle openHevcHandle, const unsigned char *buff,
     OpenHevcWrapperContexts *openHevcContexts = (OpenHevcWrapperContexts *) openHevcHandle;
     OpenHevcWrapperContext  *openHevcContext;
     for(i =0; i < MAX_DECODERS; i++)  {
-        got_picture[i]                 = 0;
-        openHevcContext                = openHevcContexts->wraper[i];
+        got_picture[i] = 0;
+        openHevcContext = openHevcContexts->wraper[i];
         openHevcContext->c->quality_id = openHevcContexts->active_layer;
-//        printf("quality_id %d \n", openHevcContext->c->quality_id);
         if (i <= openHevcContexts->active_layer) {
             openHevcContext->avpkt.size = au_len;
             openHevcContext->avpkt.data = (uint8_t *) buff;
@@ -126,31 +125,36 @@ int libOpenHevcDecode(OpenHevc_Handle openHevcHandle, const unsigned char *buff,
             openHevcContext->avpkt.size = 0;
             openHevcContext->avpkt.data = NULL;
         }
+        //AVPacket的pts必须赋值正确，否则会影响帧的显示顺序
         openHevcContext->avpkt.pts  = pts;
+        //如果执行了seek等操作，需要flush解码缓冲区，否则会花屏
         if(flush) {
             avcodec_flush_buffers(openHevcContext->c);
         }
-        len                         = avcodec_decode_video2( openHevcContext->c, openHevcContext->picture,
-                                                             &got_picture[i], &openHevcContext->avpkt);
-        if(i+1 < openHevcContexts->nb_decoders)
-            openHevcContexts->wraper[i+1]->c->BL_frame = openHevcContexts->wraper[i]->c->BL_frame;
+        len = avcodec_decode_video2(openHevcContext->c, openHevcContext->picture,
+                &got_picture[i], &openHevcContext->avpkt);
+        ALOGD("rays picture.pts=%d", openHevcContext->picture->pts);
+        if(i+1 < openHevcContexts->nb_decoders) {
+            openHevcContexts->wraper[i + 1]->c->BL_frame = openHevcContexts->wraper[i]->c->BL_frame;
+        }
     }
     if (len < 0) {
         ALOGE("%s Error while decoding frame \n", __func__);
         return -1;
     }
-    if(openHevcContexts->set_display)
+    if(openHevcContexts->set_display) {
         max_layer = openHevcContexts->display_layer;
-    else
+    }
+    else {
         max_layer = openHevcContexts->active_layer;
+    }
 
     for(i=max_layer; i>=0; i--) {
-        if(got_picture[i]){
+        if(got_picture[i]) {
             if(i != openHevcContexts->display_layer) {
                 if (i >= 0 && i < openHevcContexts->nb_decoders)
                     openHevcContexts->display_layer = i;
             }
-         //   fprintf(stderr, "Display layer %d  \n", i);
             return got_picture[i];
         }
     }
