@@ -288,11 +288,11 @@ static void convert_16_to_8_standard(const OpenHevc_Frame* const img,
     }
 }
 
-static const int DECODE_ONLY = 1;
+static const int FLAG_DECODE_ONLY = 1;
 static const int DECODE_NO_ERROR = 0;
 static const int DECODE_ERROR = -1;
 static const int DECODE_DRM_ERROR = -2;
-static const int GET_FRAME_ERROR = -3;//把AVFrame的数据拷贝到OutputBuffer出错
+static const int DECODE_GET_FRAME_ERROR = -3;//把AVFrame的数据拷贝到OutputBuffer出错
 
 // JNI references for HevcOutputBuffer class.
 static jmethodID initForRgbFrame;
@@ -367,7 +367,7 @@ int getRGBFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
             hevcFrame.frameInfo.nWidth, hevcFrame.frameInfo.nHeight);
     if (env->ExceptionCheck() || !initResult) {
         ALOGE("ERROR: %s rgbmode failed", __func__);
-        return GET_FRAME_ERROR;
+        return DECODE_GET_FRAME_ERROR;
     }
 
     // get pointer to the data buffer.
@@ -383,7 +383,7 @@ int getRGBFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
     } else {
         // todo to support other formats
         ALOGE("ERROR: %s rgbmode only supports pixfmt YUV420, current is %d", __func__, hevcFrame.frameInfo.chromat_format);
-        return GET_FRAME_ERROR;
+        return DECODE_GET_FRAME_ERROR;
     }
 
     return DECODE_NO_ERROR;
@@ -419,7 +419,7 @@ int getYUVFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
             hevcFrame.frameInfo.nYPitch, hevcFrame.frameInfo.nUPitch, colorspace);
     if (env->ExceptionCheck() || !initResult) {
         ALOGE("ERROR: %s yuvmode failed", __func__);
-        return GET_FRAME_ERROR;
+        return DECODE_GET_FRAME_ERROR;
     }
     // get pointer to the data buffer.
     const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
@@ -447,7 +447,7 @@ int getYUVFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
 //        memcpy(data, hevcFrame.pvY, yLength);
 //        memcpy(data + yLength, hevcFrame.pvU, uvLength);
 //        memcpy(data + yLength + uvLength, hevcFrame.pvV, uvLength);
-        return GET_FRAME_ERROR;
+        return DECODE_GET_FRAME_ERROR;
     }
 
     return DECODE_NO_ERROR;
@@ -507,7 +507,7 @@ DECODER_FUNC(jint, hevcDecode, jlong jHandle, jobject encoded, jint len, int64_t
 
     if(got_pic == 0) {
         ALOGD("[%s] decode only frame", __func__);
-        return DECODE_ONLY;
+        return FLAG_DECODE_ONLY;
     }
 
     memset(&hevcFrame, 0, sizeof(OpenHevc_Frame));
@@ -515,7 +515,7 @@ DECODER_FUNC(jint, hevcDecode, jlong jHandle, jobject encoded, jint len, int64_t
     got_pic = libOpenHevcGetOutput(ohevc, 1, &hevcFrame);
     if(got_pic < 0) {
         ALOGE("ERROR: %s failed getoutput", __func__);
-        return GET_FRAME_ERROR; // indicate error
+        return DECODE_GET_FRAME_ERROR; // indicate error
     }
 
     //设置OutputBuffer的pts
@@ -530,7 +530,7 @@ DECODER_FUNC(jint, hevcDecode, jlong jHandle, jobject encoded, jint len, int64_t
             break;
         default:
             ALOGE("ERROR: %s failed, outputMode %d not supported", __func__, outputMode);
-            return GET_FRAME_ERROR;
+            return DECODE_GET_FRAME_ERROR;
     }
 
     //for debug, to save frame to file
