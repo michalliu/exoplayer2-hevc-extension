@@ -53,12 +53,16 @@ typedef struct Info {
 
 static Info info;
 
-static int got_pic = 0;
 static int pic_width = -1;
 static int pic_height = -1;
 
 static int temporal_layer_id = 0;
 static int quality_layer_id = 0;
+
+typedef enum {
+    YUV = 0,//要和HevcOutputBuffer中的mode的定义保持一致
+    RGB
+} OutputMode;
 
 LIBRARY_FUNC(jboolean, hevcIsSecureDecodeSupported) {
     // Doesn't support
@@ -284,16 +288,17 @@ static void convert_16_to_8_standard(const OpenHevc_Frame* const img,
     }
 }
 
+static const int FLAG_DECODE_ONLY = 1;
 static const int DECODE_NO_ERROR = 0;
 static const int DECODE_ERROR = -1;
 static const int DECODE_DRM_ERROR = -2;
+static const int DECODE_GET_FRAME_ERROR = -3;//把AVFrame的数据拷贝到OutputBuffer出错
 
-// JNI references for VpxOutputBuffer class.
+// JNI references for HevcOutputBuffer class.
 static jmethodID initForRgbFrame;
 static jmethodID initForYuvFrame;
 static jfieldID dataField;
 static jfieldID timeUsField;
-static jfieldID outputModeField;
 
 DECODER_FUNC(jlong, hevcInit, jobject extraData, jint len) {
     OpenHevc_Handle ohevc = nullptr;
@@ -343,7 +348,6 @@ DECODER_FUNC(jlong, hevcInit, jobject extraData, jint len) {
         dataField = env->GetFieldID(outputBufferClass, "data",
                                     "Ljava/nio/ByteBuffer;");
         timeUsField = env->GetFieldID(outputBufferClass, "timeUs", "J");
-        outputModeField = env->GetFieldID(outputBufferClass, "mode", "I");
     }
 
 LABEL_RETURN:
@@ -357,10 +361,140 @@ DECODER_FUNC(jlong, hevcClose, jlong jHandle) {
     return 0;
 }
 
-DECODER_FUNC(jint, hevcDecode, jlong jHandle, jobject encoded, jint len, int64_t pts, jint flush) {
+int getRGBFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
+    // resize buffer if required.
+    jboolean initResult = env->CallBooleanMethod(jOutputBuffer, initForRgbFrame,
+            hevcFrame.frameInfo.nWidth, hevcFrame.frameInfo.nHeight);
+    if (env->ExceptionCheck() || !initResult) {
+        ALOGE("ERROR: %s rgbmode failed", __func__);
+        return DECODE_GET_FRAME_ERROR;
+    }
+
+    // get pointer to the data buffer.
+    const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
+    uint8_t* const dst = reinterpret_cast<uint8_t*>(env->GetDirectBufferAddress(dataObject));
+
+    if (hevcFrame.frameInfo.chromat_format == YUV420) {
+        libyuv::I420ToRGB565(hevcFrame.pvY, hevcFrame.frameInfo.nYPitch,
+                             hevcFrame.pvU, hevcFrame.frameInfo.nUPitch,
+                             hevcFrame.pvV, hevcFrame.frameInfo.nVPitch,
+                             dst, hevcFrame.frameInfo.nWidth * 2,
+                             hevcFrame.frameInfo.nWidth, hevcFrame.frameInfo.nHeight);
+    } else {
+        // todo to support other formats
+        ALOGE("ERROR: %s rgbmode only supports pixfmt YUV420, current is %d", __func__, hevcFrame.frameInfo.chromat_format);
+        return DECODE_GET_FRAME_ERROR;
+    }
+
+    return DECODE_NO_ERROR;
+}
+
+int getYUVFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
+    // yuv
+    const int kColorspaceUnknown = 0;
+    const int kColorspaceBT601 = 1;
+    const int kColorspaceBT709 = 2;
+    const int kColorspaceBT2020 = 3;
+
+    int colorspace = kColorspaceUnknown;
+    switch (hevcFrame.frameInfo.colorspace) {
+        case AVCOL_SPC_BT470BG:
+        case AVCOL_SPC_SMPTE170M:
+            colorspace = kColorspaceBT601;
+            break;
+        case AVCOL_SPC_BT709:
+            colorspace = kColorspaceBT709;
+            break;
+        case AVCOL_SPC_BT2020_NCL:
+        case AVCOL_SPC_BT2020_CL:
+            colorspace = kColorspaceBT2020;
+            break;
+        default:
+            break;
+    }
+
+    // resize buffer if required.
+    jboolean initResult = env->CallBooleanMethod(
+            jOutputBuffer, initForYuvFrame, hevcFrame.frameInfo.nWidth, hevcFrame.frameInfo.nHeight,
+            hevcFrame.frameInfo.nYPitch, hevcFrame.frameInfo.nUPitch, colorspace);
+    if (env->ExceptionCheck() || !initResult) {
+        ALOGE("ERROR: %s yuvmode failed", __func__);
+        return DECODE_GET_FRAME_ERROR;
+    }
+    // get pointer to the data buffer.
+    const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
+    jbyte* const data =
+            reinterpret_cast<jbyte*>(env->GetDirectBufferAddress(dataObject));
+
+    const int32_t uvHeight = (hevcFrame.frameInfo.nHeight + 1) / 2;
+    const uint64_t yLength = hevcFrame.frameInfo.nYPitch * hevcFrame.frameInfo.nHeight;
+    const uint64_t uvLength = hevcFrame.frameInfo.nUPitch * uvHeight;
+
+    if (hevcFrame.frameInfo.chromat_format == YUV420) {  // HBD planar 420.
+        // Note: The stride for BT2020 is twice of what we use so this is wasting
+        // memory. The long term goal however is to upload half-float/short so
+        // it's not important to optimize the stride at this time.
+        int converted = 0;
+#ifdef __ARM_NEON__
+        converted = convert_16_to_8_neon(&hevcFrame, data, uvHeight, yLength, uvLength);
+#endif  // __ARM_NEON__
+        if (!converted) {
+            convert_16_to_8_standard(&hevcFrame, data, uvHeight, yLength, uvLength);
+        }
+    } else {
+        // todo to support other formats
+        ALOGW("WARN: %s unrecognized pixfmt %d", __func__ ,hevcFrame.frameInfo.chromat_format);
+//        memcpy(data, hevcFrame.pvY, yLength);
+//        memcpy(data + yLength, hevcFrame.pvU, uvLength);
+//        memcpy(data + yLength + uvLength, hevcFrame.pvV, uvLength);
+        return DECODE_GET_FRAME_ERROR;
+    }
+
+    return DECODE_NO_ERROR;
+}
+
+void saveFrame(JNIEnv* env, jstring jStr, OpenHevc_Frame& hevcFrame) {
+    FILE* outFile = nullptr;
+    const char* path = env->GetStringUTFChars(jStr, nullptr);
+    struct stat st;
+    int res = stat(path, &st);
+    if(0 == res && (st.st_mode & S_IFDIR)) {
+        char outFilePath[512];
+        sprintf(outFilePath, "%s/video_%dx%d.yuv", path, pic_width, pic_height);
+        outFile = fopen(outFilePath, "ab+");
+        ALOGV("save yuv to %s", outFilePath);
+
+        // write Y
+        int format = hevcFrame.frameInfo.chromat_format == YUV420 ? 1 : 0;
+        for (int h = 0; h < hevcFrame.frameInfo.nHeight; h++) {
+            const uint8_t* srcBase1 = hevcFrame.pvY + hevcFrame.frameInfo.nYPitch * h;
+            fwrite(srcBase1, sizeof(uint8_t), hevcFrame.frameInfo.nWidth, outFile);
+        }
+        // write UV
+        int uvLineSize = hevcFrame.frameInfo.nWidth >> format;
+        for (int h = 0; h < hevcFrame.frameInfo.nHeight / 2; h++) {
+            const uint8_t* srcBase2 = hevcFrame.pvU + hevcFrame.frameInfo.nUPitch * h;
+            fwrite(srcBase2, sizeof(uint8_t) , uvLineSize, outFile);
+        }
+        for (int h = 0; h < hevcFrame.frameInfo.nHeight / 2 ; h++) {
+            const uint8_t* srcBase3 = hevcFrame.pvV + hevcFrame.frameInfo.nVPitch * h;
+            fwrite(srcBase3, sizeof(uint8_t) , uvLineSize, outFile);
+        }
+        fflush(outFile);
+        fclose(outFile);
+    } else {
+        ALOGW("WARN: %s is not a valid dir", path);
+    }
+}
+
+DECODER_FUNC(jint, hevcDecode, jlong jHandle, jobject encoded, jint len, int64_t pts,
+             jobject jOutputBuffer, jint outputMode, jint flush, jstring jStr) {
     OpenHevc_Handle ohevc = (OpenHevc_Handle) jHandle;
     const uint8_t *const buffer =
             reinterpret_cast<const uint8_t *>(env->GetDirectBufferAddress(encoded));
+    int got_pic;
+    OpenHevc_Frame hevcFrame;
+
     //Zero if no frame could be decompressed, otherwise, it is nonzero.
     //-1 indicates error occurred
     got_pic = libOpenHevcDecode(ohevc, buffer, len, pts, flush);
@@ -370,165 +504,43 @@ DECODER_FUNC(jint, hevcDecode, jlong jHandle, jobject encoded, jint len, int64_t
         ALOGE("ERROR: hevcDecode failed, status= %d", got_pic);
         return DECODE_ERROR;
     }
-    return DECODE_NO_ERROR;
+
+    if(got_pic == 0) {
+        ALOGD("[%s] decode only frame", __func__);
+        return FLAG_DECODE_ONLY;
+    }
+
+    memset(&hevcFrame, 0, sizeof(OpenHevc_Frame));
+    //libOpenHevcGetPictureInfo(ohevc, &hevcFrame.frameInfo);
+    got_pic = libOpenHevcGetOutput(ohevc, 1, &hevcFrame);
+    if(got_pic < 0) {
+        ALOGE("ERROR: %s failed getoutput", __func__);
+        return DECODE_GET_FRAME_ERROR; // indicate error
+    }
+
+    //设置OutputBuffer的pts
+    env->SetLongField(jOutputBuffer, timeUsField, hevcFrame.frameInfo.pts);
+
+    switch(outputMode) {
+        case OutputMode::RGB:
+            got_pic = getRGBFrame(env, jOutputBuffer, hevcFrame);
+            break;
+        case OutputMode::YUV:
+            got_pic = getYUVFrame(env, jOutputBuffer, hevcFrame);
+            break;
+        default:
+            ALOGE("ERROR: %s failed, outputMode %d not supported", __func__, outputMode);
+            return DECODE_GET_FRAME_ERROR;
+    }
+
+    //for debug, to save frame to file
+    if(jStr != nullptr) {
+       saveFrame(env, jStr, hevcFrame);
+    }
+    return got_pic;
 }
 
 DECODER_FUNC(jstring, hevcGetErrorMessage, jlong jHandle) {
     return env->NewStringUTF("oops");
 }
 
-DECODER_FUNC(jint, hevcGetFrame, jlong jHandle, jobject jOutputBuffer, jstring jStr) {
-    if (got_pic > 0) {
-        OpenHevc_Handle ohevc = (OpenHevc_Handle) jHandle;
-        OpenHevc_Frame hvcFrame;
-        FILE* outFile = nullptr;
-
-        memset(&hvcFrame, 0, sizeof(OpenHevc_Frame_cpy) );
-
-        libOpenHevcGetPictureInfo(ohevc, &hvcFrame.frameInfo);
-        if ((pic_width != hvcFrame.frameInfo.nWidth) || (pic_height != hvcFrame.frameInfo.nHeight)) {
-            pic_width  = hvcFrame.frameInfo.nWidth;
-            pic_height = hvcFrame.frameInfo.nHeight;
-        }
-
-        if (jStr != nullptr) {
-            const char* path = env->GetStringUTFChars(jStr, nullptr);
-            struct stat st;
-            int32_t res = stat(path, &st);
-            if (0 == res && (st.st_mode & S_IFDIR)) {
-                char outFilePath[512];
-//                sprintf(outFilePath, "%s/%03d_%dx%d.yuv", path, info.NbFrame, pic_width, pic_height);
-//                outFile = fopen(outFilePath, "wb");
-                sprintf(outFilePath, "%s/video_%dx%d.yuv", path, pic_width, pic_height);
-                outFile = fopen(outFilePath, "ab+");
-                ALOGV("save yuv to %s", outFilePath);
-            } else {
-                ALOGW("WARN: %s is not a valid dir", path);
-            }
-        }
-
-        int result = libOpenHevcGetOutput(ohevc, 1, &hvcFrame);
-
-        if (result < 1) { // TODO: never happens
-            ALOGE("ERROR: %s failed getoutput", __func__);
-            return -1; // indicate error
-        }
-
-        // fill outputBuffer
-        const int kOutputModeYuv = 0;
-        const int kOutputModeRgb = 1;
-        int outputMode = env->GetIntField(jOutputBuffer, outputModeField);
-
-        if (outFile) {
-            // write Y
-            int format = hvcFrame.frameInfo.chromat_format == YUV420 ? 1 : 0;
-            for (int h = 0; h < hvcFrame.frameInfo.nHeight; h++) {
-                const uint8_t* srcBase1 = hvcFrame.pvY + hvcFrame.frameInfo.nYPitch * h;
-                fwrite(srcBase1, sizeof(uint8_t), hvcFrame.frameInfo.nWidth, outFile);
-            }
-            // write UV
-            int uvLineSize = hvcFrame.frameInfo.nWidth >> format;
-            for (int h = 0; h < hvcFrame.frameInfo.nHeight / 2; h++) {
-                const uint8_t* srcBase2 = hvcFrame.pvU + hvcFrame.frameInfo.nUPitch * h;
-                fwrite(srcBase2, sizeof(uint8_t) , uvLineSize, outFile);
-            }
-            for (int h = 0; h < hvcFrame.frameInfo.nHeight / 2 ; h++) {
-                const uint8_t* srcBase3 = hvcFrame.pvV + hvcFrame.frameInfo.nVPitch * h;
-                fwrite(srcBase3, sizeof(uint8_t) , uvLineSize, outFile);
-            }
-            fflush(outFile);
-            fclose(outFile);
-        }
-
-        if (outputMode == kOutputModeRgb) {
-            // resize buffer if required.
-            jboolean initResult = env->CallBooleanMethod(jOutputBuffer, initForRgbFrame,
-                                                         hvcFrame.frameInfo.nWidth, hvcFrame.frameInfo.nHeight);
-            if (env->ExceptionCheck() || !initResult) {
-                ALOGE("ERROR: %s rgbmode failed", __func__);
-                return -1;
-            }
-
-            // get pointer to the data buffer.
-            const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
-            uint8_t* const dst =
-                    reinterpret_cast<uint8_t*>(env->GetDirectBufferAddress(dataObject));
-            env->SetLongField(jOutputBuffer,timeUsField,hvcFrame.frameInfo.pts);
-            if (hvcFrame.frameInfo.chromat_format == YUV420) {
-                libyuv::I420ToRGB565((uint8*)hvcFrame.pvY, hvcFrame.frameInfo.nYPitch,
-                                     (uint8*)hvcFrame.pvU, hvcFrame.frameInfo.nUPitch,
-                                     (uint8*)hvcFrame.pvV, hvcFrame.frameInfo.nVPitch,
-                                     dst, hvcFrame.frameInfo.nWidth * 2, hvcFrame.frameInfo.nWidth, hvcFrame.frameInfo.nHeight);
-            } else {
-                ALOGE("ERROR: %s rgbmode only supports pixfmt YUV420", __func__);
-                return -1;
-            }
-            return 0;
-        } else if (outputMode == kOutputModeYuv){
-            // yuv
-            const int kColorspaceUnknown = 0;
-            const int kColorspaceBT601 = 1;
-            const int kColorspaceBT709 = 2;
-            const int kColorspaceBT2020 = 3;
-
-
-            int colorspace = kColorspaceUnknown;
-            switch (hvcFrame.frameInfo.colorspace) {
-                case AVCOL_SPC_BT470BG:
-                case AVCOL_SPC_SMPTE170M:
-                    colorspace = kColorspaceBT601;
-                    break;
-                case AVCOL_SPC_BT709:
-                    colorspace = kColorspaceBT709;
-                    break;
-                case AVCOL_SPC_BT2020_NCL:
-                case AVCOL_SPC_BT2020_CL:
-                    colorspace = kColorspaceBT2020;
-                    break;
-                default:
-                    break;
-            }
-
-            // resize buffer if required.
-            jboolean initResult = env->CallBooleanMethod(
-                    jOutputBuffer, initForYuvFrame, hvcFrame.frameInfo.nWidth, hvcFrame.frameInfo.nHeight,
-                    hvcFrame.frameInfo.nYPitch, hvcFrame.frameInfo.nUPitch, colorspace);
-            if (env->ExceptionCheck() || !initResult) {
-                ALOGE("ERROR: %s yuvmode failed", __func__);
-                return -1;
-            }
-            // get pointer to the data buffer.
-            const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
-            jbyte* const data =
-                    reinterpret_cast<jbyte*>(env->GetDirectBufferAddress(dataObject));
-
-            const int32_t uvHeight = (hvcFrame.frameInfo.nHeight + 1) / 2;
-            const uint64_t yLength = hvcFrame.frameInfo.nYPitch * hvcFrame.frameInfo.nHeight;
-            const uint64_t uvLength = hvcFrame.frameInfo.nUPitch * uvHeight;
-
-            if (hvcFrame.frameInfo.chromat_format == YUV420) {  // HBD planar 420.
-                // Note: The stride for BT2020 is twice of what we use so this is wasting
-                // memory. The long term goal however is to upload half-float/short so
-                // it's not important to optimize the stride at this time.
-                int converted = 0;
-#ifdef __ARM_NEON__
-                converted = convert_16_to_8_neon(&hvcFrame, data, uvHeight, yLength, uvLength);
-#endif  // __ARM_NEON__
-                if (!converted) {
-                    convert_16_to_8_standard(&hvcFrame, data, uvHeight, yLength, uvLength);
-                }
-            } else {
-                ALOGW("WARN: %s unrecognized pixfmt %d", __func__ ,hvcFrame.frameInfo.chromat_format);
-                memcpy(data, hvcFrame.pvY, yLength);
-                memcpy(data + yLength, hvcFrame.pvU, uvLength);
-                memcpy(data + yLength + uvLength, hvcFrame.pvV, uvLength);
-            }
-        } else {
-            ALOGE("ERROR: %s failed, outputMode %d not supported", __func__, outputMode);
-            return -1; // decode error
-        }
-        return 0; // decode normally
-    }
-    return 1; // flag decode only
-}
-// ref: https://github.com/gpac/gpac/blob/master/applications/testapps/hevcbench/main.c
