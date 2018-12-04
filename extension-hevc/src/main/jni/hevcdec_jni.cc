@@ -539,8 +539,3 @@ DECODER_FUNC(jint, hevcDecode, jlong jHandle, jobject encoded, jint len, int64_t
     }
     return got_pic;
 }
-
-DECODER_FUNC(jstring, hevcGetErrorMessage, jlong jHandle) {
-    return env->NewStringUTF("oops");
-}
-
