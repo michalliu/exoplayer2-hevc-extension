@@ -15,6 +15,8 @@
  */
 package com.google.android.exoplayer2.ext.hevc;
 
+import android.util.Log;
+
 import com.google.android.exoplayer2.decoder.OutputBuffer;
 import com.google.android.exoplayer2.video.ColorInfo;
 
@@ -24,6 +26,7 @@ import java.nio.ByteBuffer;
  * Output buffer containing video frame data, populated by {@link HevcDecoder}.
  */
 /* package */ final class HevcOutputBuffer extends OutputBuffer {
+  public static final String TAG = "HevcOutputBuffer";
 
   public static final int COLORSPACE_UNKNOWN = 0;
   public static final int COLORSPACE_BT601 = 1;
@@ -78,16 +81,33 @@ import java.nio.ByteBuffer;
    * Resizes the buffer based on the given dimensions. Called via JNI after decoding completes.
    * @return the resized buffer size, -1 indicates resize error
    */
-  public int initForRgbFrame(int width, int height, int stride, int pixfmt) {
+  public int initForRgbFrame(int width, int height, int pixfmt) {
     this.width = width;
     this.height = height;
     this.yuvPlanes = null;
-    if (!isSafeToMultiply(width, height) || !isSafeToMultiply(width * height, stride)) {
-      return -1;
+    int bytesPerPixel;
+    switch (pixfmt) {
+      case PIXFMT_RGB565:
+        bytesPerPixel = 2;
+        break;
+      case PIXFMT_ARGB8888:
+        bytesPerPixel = 4;
+        break;
+      default:
+        Log.e(TAG, "[initForRgbFrame] invalid pixfmt, " + pixfmt);
+        return -1;
+    }
+    if (!isSafeToMultiply(width, height) || !isSafeToMultiply(width * height, bytesPerPixel)) {
+      return -2;
     }
     this.pixfmt = pixfmt;
-    int minimumRgbSize = width * height * stride;
-    initData(minimumRgbSize);
+    int minimumRgbSize = width * height * bytesPerPixel;
+    try {
+      initData(minimumRgbSize);
+    } catch(Throwable t) {
+      Log.e(TAG, "[initData] error", t);
+      return -3;
+    }
     return minimumRgbSize;
   }
 

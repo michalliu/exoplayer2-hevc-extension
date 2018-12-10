@@ -350,7 +350,7 @@ DECODER_FUNC(jlong, hevcInit, jobject extraData, jint len) {
         initForYuvFrame = env->GetMethodID(outputBufferClass, "initForYuvFrame",
                                            "(IIIII)Z");
         initForRgbFrame = env->GetMethodID(outputBufferClass, "initForRgbFrame",
-                                           "(IIII)I");
+                                           "(III)I");
         dataField = env->GetFieldID(outputBufferClass, "data",
                                     "Ljava/nio/ByteBuffer;");
         timeUsField = env->GetFieldID(outputBufferClass, "timeUs", "J");
@@ -373,7 +373,7 @@ int getRGBFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
         jint bufferSize = env->CallIntMethod(jOutputBuffer, initForRgbFrame,
                                                      hevcFrame.frameInfo.nWidth,
                                                      hevcFrame.frameInfo.nHeight,
-                                                     2, OutputPixFmt::PIXFMT_RGB565);
+                                                     OutputPixFmt::PIXFMT_RGB565);
         if (env->ExceptionCheck() || bufferSize < 0) {
             ALOGE("ERROR: %s rgbmode failed", __func__);
             return DECODE_GET_FRAME_ERROR;
@@ -393,7 +393,7 @@ int getRGBFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
         jint bufferSize = env->CallIntMethod(jOutputBuffer, initForRgbFrame,
                                                  hevcFrame.frameInfo.nWidth,
                                                  hevcFrame.frameInfo.nHeight,
-                                                 2, OutputPixFmt::PIXFMT_RGB565);
+                                                 OutputPixFmt::PIXFMT_RGB565);
         if (env->ExceptionCheck() || bufferSize < 0) {
             ALOGE("ERROR: %s rgbmode failed", __func__);
             return DECODE_GET_FRAME_ERROR;
@@ -413,7 +413,7 @@ int getRGBFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
         jint bufferSize = env->CallIntMethod(jOutputBuffer, initForRgbFrame,
                                                  hevcFrame.frameInfo.nWidth,
                                                  hevcFrame.frameInfo.nHeight,
-                                                 4, OutputPixFmt::PIXFMT_ARGB8888);
+                                                 OutputPixFmt::PIXFMT_ARGB8888);
         if (env->ExceptionCheck() || bufferSize < 0) {
             ALOGE("ERROR: %s rgbmode failed", __func__);
             return DECODE_GET_FRAME_ERROR;
