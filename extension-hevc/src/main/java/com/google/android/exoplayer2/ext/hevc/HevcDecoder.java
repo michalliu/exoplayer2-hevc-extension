@@ -29,7 +29,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 
 /**
- * Vpx decoder.
+ * Hevc decoder.
  */
 /* package */ final class HevcDecoder extends
         SimpleDecoder<HevcInputBuffer, HevcOutputBuffer, HevcDecoderException> {
@@ -141,7 +141,7 @@ import java.util.List;
 
     ByteBuffer inputData = inputBuffer.data;
     int inputSize = inputData.limit();
-    
+
     final long result = hevcDecode(hvcDecContext, inputData, inputSize, inputBuffer.timeUs,
             outputBuffer, outputMode, reset, null);
 

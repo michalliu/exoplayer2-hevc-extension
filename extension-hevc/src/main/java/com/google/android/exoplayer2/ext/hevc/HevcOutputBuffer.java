@@ -30,6 +30,10 @@ import java.nio.ByteBuffer;
   public static final int COLORSPACE_BT709 = 2;
   public static final int COLORSPACE_BT2020 = 3;
 
+  public static final int PIXFMT_UNKNOWN = 0;
+  public static final int PIXFMT_RGB565 = 1;
+  public static final int PIXFMT_ARGB8888 = 2;
+
   private final HevcDecoder owner;
 
   public int mode;
@@ -47,6 +51,7 @@ import java.nio.ByteBuffer;
   public ByteBuffer[] yuvPlanes;
   public int[] yuvStrides;
   public int colorspace;
+  public int pixfmt;
 
   public HevcOutputBuffer(HevcDecoder owner) {
     this.owner = owner;
@@ -71,18 +76,19 @@ import java.nio.ByteBuffer;
 
   /**
    * Resizes the buffer based on the given dimensions. Called via JNI after decoding completes.
-   * @return Whether the buffer was resized successfully.
+   * @return the resized buffer size, -1 indicates resize error
    */
-  public boolean initForRgbFrame(int width, int height) {
+  public int initForRgbFrame(int width, int height, int stride, int pixfmt) {
     this.width = width;
     this.height = height;
     this.yuvPlanes = null;
-    if (!isSafeToMultiply(width, height) || !isSafeToMultiply(width * height, 2)) {
-      return false;
+    if (!isSafeToMultiply(width, height) || !isSafeToMultiply(width * height, stride)) {
+      return -1;
     }
-    int minimumRgbSize = width * height * 2;
+    this.pixfmt = pixfmt;
+    int minimumRgbSize = width * height * stride;
     initData(minimumRgbSize);
-    return true;
+    return minimumRgbSize;
   }
 
   /**

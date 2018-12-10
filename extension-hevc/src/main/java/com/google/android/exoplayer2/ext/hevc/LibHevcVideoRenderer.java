@@ -35,6 +35,7 @@ import com.google.android.exoplayer2.FormatHolder;
 import com.google.android.exoplayer2.PlayerMessage.Target;
 import com.google.android.exoplayer2.decoder.DecoderCounters;
 import com.google.android.exoplayer2.decoder.DecoderInputBuffer;
+import com.google.android.exoplayer2.decoder.OutputBuffer;
 import com.google.android.exoplayer2.drm.DrmSession;
 import com.google.android.exoplayer2.drm.DrmSession.DrmSessionException;
 import com.google.android.exoplayer2.drm.DrmSessionManager;
@@ -880,7 +881,14 @@ public final class LibHevcVideoRenderer extends BaseRenderer {
     if (bitmap == null
         || bitmap.getWidth() != outputBuffer.width
         || bitmap.getHeight() != outputBuffer.height) {
-      bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.RGB_565);
+      if(HevcOutputBuffer.PIXFMT_RGB565 == outputBuffer.pixfmt) {
+        bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.RGB_565);
+      } else if(HevcOutputBuffer.PIXFMT_ARGB8888 == outputBuffer.pixfmt) {
+        bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.ARGB_8888);
+      } else {
+        //这里应该错误处理的，先暂时按565的走吧
+        bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.RGB_565);
+      }
     }
     bitmap.copyPixelsFromBuffer(outputBuffer.data);
     Canvas canvas = surface.lockCanvas(null);
