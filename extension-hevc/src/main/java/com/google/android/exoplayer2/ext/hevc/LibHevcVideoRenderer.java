@@ -35,6 +35,7 @@ import com.google.android.exoplayer2.FormatHolder;
 import com.google.android.exoplayer2.PlayerMessage.Target;
 import com.google.android.exoplayer2.decoder.DecoderCounters;
 import com.google.android.exoplayer2.decoder.DecoderInputBuffer;
+import com.google.android.exoplayer2.decoder.OutputBuffer;
 import com.google.android.exoplayer2.drm.DrmSession;
 import com.google.android.exoplayer2.drm.DrmSession.DrmSessionException;
 import com.google.android.exoplayer2.drm.DrmSessionManager;
@@ -880,7 +881,14 @@ public final class LibHevcVideoRenderer extends BaseRenderer {
     if (bitmap == null
         || bitmap.getWidth() != outputBuffer.width
         || bitmap.getHeight() != outputBuffer.height) {
-      bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.RGB_565);
+      if(HevcOutputBuffer.PIXFMT_RGB565 == outputBuffer.pixfmt) {
+        bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.RGB_565);
+      } else if(HevcOutputBuffer.PIXFMT_ARGB8888 == outputBuffer.pixfmt) {
+        bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.ARGB_8888);
+      } else {
+          //正常走不到这里来，在HevcOutputBuffer#initRgbFrame时就会返回异常了，这里只是兜个底
+          throw new IllegalArgumentException("invalid output buffer pixfmt="+outputBuffer.pixfmt);
+      }
     }
     bitmap.copyPixelsFromBuffer(outputBuffer.data);
     Canvas canvas = surface.lockCanvas(null);

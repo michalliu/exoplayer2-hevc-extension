@@ -64,6 +64,12 @@ typedef enum {
     RGB
 } OutputMode;
 
+typedef enum {
+    PIXFMT_UNKNOWN = 0, //要和HevcOutputBuffer中的PIXFMT保持一致
+    PIXFMT_RGB565,
+    PIXFMT_ARGB8888
+} OutputPixFmt;
+
 LIBRARY_FUNC(jboolean, hevcIsSecureDecodeSupported) {
     // Doesn't support
     // Java client should have checked hevcIsSecureDecodeSupported
@@ -344,7 +350,7 @@ DECODER_FUNC(jlong, hevcInit, jobject extraData, jint len) {
         initForYuvFrame = env->GetMethodID(outputBufferClass, "initForYuvFrame",
                                            "(IIIII)Z");
         initForRgbFrame = env->GetMethodID(outputBufferClass, "initForRgbFrame",
-                                           "(II)Z");
+                                           "(III)I");
         dataField = env->GetFieldID(outputBufferClass, "data",
                                     "Ljava/nio/ByteBuffer;");
         timeUsField = env->GetFieldID(outputBufferClass, "timeUs", "J");
@@ -362,28 +368,77 @@ DECODER_FUNC(jlong, hevcClose, jlong jHandle) {
 }
 
 int getRGBFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
-    // resize buffer if required.
-    jboolean initResult = env->CallBooleanMethod(jOutputBuffer, initForRgbFrame,
-            hevcFrame.frameInfo.nWidth, hevcFrame.frameInfo.nHeight);
-    if (env->ExceptionCheck() || !initResult) {
-        ALOGE("ERROR: %s rgbmode failed", __func__);
-        return DECODE_GET_FRAME_ERROR;
-    }
+    if (YUV420 == hevcFrame.frameInfo.chromat_format) {
 
-    // get pointer to the data buffer.
-    const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
-    uint8_t* const dst = reinterpret_cast<uint8_t*>(env->GetDirectBufferAddress(dataObject));
+        jint bufferSize = env->CallIntMethod(jOutputBuffer, initForRgbFrame,
+                                                     hevcFrame.frameInfo.nWidth,
+                                                     hevcFrame.frameInfo.nHeight,
+                                                     OutputPixFmt::PIXFMT_RGB565);
+        if (env->ExceptionCheck() || bufferSize < 0) {
+            ALOGE("ERROR: %s rgbmode failed", __func__);
+            return DECODE_GET_FRAME_ERROR;
+        }
 
-    if (hevcFrame.frameInfo.chromat_format == YUV420) {
+        // get pointer to the data buffer.
+        const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
+        uint8_t *const dst = reinterpret_cast<uint8_t *>(env->GetDirectBufferAddress(dataObject));
+
         libyuv::I420ToRGB565(hevcFrame.pvY, hevcFrame.frameInfo.nYPitch,
                              hevcFrame.pvU, hevcFrame.frameInfo.nUPitch,
                              hevcFrame.pvV, hevcFrame.frameInfo.nVPitch,
                              dst, hevcFrame.frameInfo.nWidth * 2,
                              hevcFrame.frameInfo.nWidth, hevcFrame.frameInfo.nHeight);
-    } else {
-        // todo to support other formats
-        ALOGE("ERROR: %s rgbmode only supports pixfmt YUV420, current is %d", __func__, hevcFrame.frameInfo.chromat_format);
-        return DECODE_GET_FRAME_ERROR;
+    } else if(YUV422 == hevcFrame.frameInfo.chromat_format) {
+
+        jint bufferSize = env->CallIntMethod(jOutputBuffer, initForRgbFrame,
+                                                 hevcFrame.frameInfo.nWidth,
+                                                 hevcFrame.frameInfo.nHeight,
+                                                 OutputPixFmt::PIXFMT_RGB565);
+        if (env->ExceptionCheck() || bufferSize < 0) {
+            ALOGE("ERROR: %s rgbmode failed", __func__);
+            return DECODE_GET_FRAME_ERROR;
+        }
+
+        // get pointer to the data buffer.
+        const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
+        uint8_t *const dst = reinterpret_cast<uint8_t *>(env->GetDirectBufferAddress(dataObject));
+
+        libyuv::I422ToRGB565(hevcFrame.pvY, hevcFrame.frameInfo.nYPitch,
+                             hevcFrame.pvU, hevcFrame.frameInfo.nUPitch,
+                             hevcFrame.pvV, hevcFrame.frameInfo.nVPitch,
+                             dst, hevcFrame.frameInfo.nWidth * 2,
+                             hevcFrame.frameInfo.nWidth, hevcFrame.frameInfo.nHeight);
+    } else if(YUV444 == hevcFrame.frameInfo.chromat_format) {
+
+        jint bufferSize = env->CallIntMethod(jOutputBuffer, initForRgbFrame,
+                                                 hevcFrame.frameInfo.nWidth,
+                                                 hevcFrame.frameInfo.nHeight,
+                                                 OutputPixFmt::PIXFMT_ARGB8888);
+        if (env->ExceptionCheck() || bufferSize < 0) {
+            ALOGE("ERROR: %s rgbmode failed", __func__);
+            return DECODE_GET_FRAME_ERROR;
+        }
+
+        // get pointer to the data buffer.
+        const jobject dataObject = env->GetObjectField(jOutputBuffer, dataField);
+        uint8_t *const dst = reinterpret_cast<uint8_t *>(env->GetDirectBufferAddress(dataObject));
+
+        /**
+         * Bitmap.Config.ARGB8888像素的布局从低位到高位是：R G B A
+         * 而I444ToARGB像素的内存布局从低位到高位是：B G R A
+         * 所以要把libyuv转换过后的每个像素的第0个字节和第2个字节交换才能显示在Bitmap上
+         * 这里是可以优化的，如SIMD，或者从libyuv源码上改成直接输出RGBA，等真有需求的时候再改
+         */
+        libyuv::I444ToARGB(hevcFrame.pvY, hevcFrame.frameInfo.nYPitch,
+                           hevcFrame.pvU, hevcFrame.frameInfo.nUPitch,
+                           hevcFrame.pvV, hevcFrame.frameInfo.nVPitch,
+                           dst, hevcFrame.frameInfo.nWidth * 4,
+                           hevcFrame.frameInfo.nWidth, hevcFrame.frameInfo.nHeight);
+        for(int i = 0; i < bufferSize; i+=4) {
+            uint8_t tmp = dst[i+2];
+            dst[i+2] = dst[i+0];
+            dst[i+0] = tmp;
+        }
     }
 
     return DECODE_NO_ERROR;
