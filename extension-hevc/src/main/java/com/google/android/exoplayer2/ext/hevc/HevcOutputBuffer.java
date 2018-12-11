@@ -28,6 +28,7 @@ import java.nio.ByteBuffer;
 /* package */ final class HevcOutputBuffer extends OutputBuffer {
   public static final String TAG = "HevcOutputBuffer";
 
+  // DON NOT CHANGE THESE CONSTANTS UNLESS ITS NATIVE COUNTERPART IS CHANGED
   public static final int COLORSPACE_UNKNOWN = 0;
   public static final int COLORSPACE_BT601 = 1;
   public static final int COLORSPACE_BT709 = 2;
@@ -79,7 +80,7 @@ import java.nio.ByteBuffer;
 
   /**
    * Resizes the buffer based on the given dimensions. Called via JNI after decoding completes.
-   * @return the resized buffer size, -1 indicates resize error
+   * @return the resized buffer size, negative indicates resize error
    */
   public int initForRgbFrame(int width, int height, int pixfmt) {
     this.width = width;
@@ -94,21 +95,22 @@ import java.nio.ByteBuffer;
         bytesPerPixel = 4;
         break;
       default:
-        Log.e(TAG, "[initForRgbFrame] invalid pixfmt, " + pixfmt);
+        Log.e(TAG, "[initForRgbFrame] unrecognized pixfmt, " + pixfmt);
         return -1;
     }
     if (!isSafeToMultiply(width, height) || !isSafeToMultiply(width * height, bytesPerPixel)) {
+      Log.e(TAG, "[initForRgbFrame] cant handle size " + width + "x" + height + "x" + bytesPerPixel);
       return -2;
     }
     this.pixfmt = pixfmt;
-    int minimumRgbSize = width * height * bytesPerPixel;
+    int bytes = width * height * bytesPerPixel;
     try {
-      initData(minimumRgbSize);
-    } catch(Throwable t) {
-      Log.e(TAG, "[initData] error", t);
+      initData(bytes);
+    } catch(OutOfMemoryError err) {
+      Log.e(TAG, "[initForRgbFrame]  error allocate memory" + bytes, err);
       return -3;
     }
-    return minimumRgbSize;
+    return bytes;
   }
 
   /**

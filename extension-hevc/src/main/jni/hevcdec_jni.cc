@@ -375,7 +375,7 @@ int getRGBFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
                                                      hevcFrame.frameInfo.nHeight,
                                                      OutputPixFmt::PIXFMT_RGB565);
         if (env->ExceptionCheck() || bufferSize < 0) {
-            ALOGE("ERROR: %s rgbmode failed", __func__);
+            ALOGE("ERROR: %s rgbmode failed, bufferSize %d", __func__, bufferSize);
             return DECODE_GET_FRAME_ERROR;
         }
 
@@ -395,7 +395,7 @@ int getRGBFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
                                                  hevcFrame.frameInfo.nHeight,
                                                  OutputPixFmt::PIXFMT_RGB565);
         if (env->ExceptionCheck() || bufferSize < 0) {
-            ALOGE("ERROR: %s rgbmode failed", __func__);
+            ALOGE("ERROR: %s rgbmode failed, bufferSize %d", __func__, bufferSize);
             return DECODE_GET_FRAME_ERROR;
         }
 
@@ -415,7 +415,7 @@ int getRGBFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
                                                  hevcFrame.frameInfo.nHeight,
                                                  OutputPixFmt::PIXFMT_ARGB8888);
         if (env->ExceptionCheck() || bufferSize < 0) {
-            ALOGE("ERROR: %s rgbmode failed", __func__);
+            ALOGE("ERROR: %s rgbmode failed, bufferSize %d", __func__, bufferSize);
             return DECODE_GET_FRAME_ERROR;
         }
 
@@ -439,6 +439,9 @@ int getRGBFrame(JNIEnv* env, jobject jOutputBuffer, OpenHevc_Frame& hevcFrame) {
             dst[i+2] = dst[i+0];
             dst[i+0] = tmp;
         }
+    } else {
+        ALOGE("ERROR: %s rgbmode failed, unrecognized chroma format %d", __func__, hevcFrame.frameInfo.chromat_format);
+        return DECODE_GET_FRAME_ERROR;
     }
 
     return DECODE_NO_ERROR;

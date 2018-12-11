@@ -886,8 +886,7 @@ public final class LibHevcVideoRenderer extends BaseRenderer {
       } else if(HevcOutputBuffer.PIXFMT_ARGB8888 == outputBuffer.pixfmt) {
         bitmap = Bitmap.createBitmap(outputBuffer.width, outputBuffer.height, Bitmap.Config.ARGB_8888);
       } else {
-          //正常走不到这里来，在HevcOutputBuffer#initRgbFrame时就会返回异常了，这里只是兜个底
-          throw new IllegalArgumentException("invalid output buffer pixfmt="+outputBuffer.pixfmt);
+          throw new IllegalArgumentException("unrecognized output buffer pixfmt " + outputBuffer.pixfmt);
       }
     }
     bitmap.copyPixelsFromBuffer(outputBuffer.data);
