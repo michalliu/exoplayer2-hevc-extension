@@ -343,6 +343,11 @@ public final class LibHevcVideoRenderer extends BaseRenderer {
   protected void onStopped() {
     joiningDeadlineMs = C.TIME_UNSET;
     maybeNotifyDroppedFrames();
+
+    if(null != bitmap && !bitmap.isRecycled()) {
+      bitmap.recycle();
+    }
+    bitmap = null;
   }
 
   @Override
